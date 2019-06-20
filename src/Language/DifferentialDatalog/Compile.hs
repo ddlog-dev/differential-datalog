@@ -1236,7 +1236,7 @@ where
 -}
 compileApplyNode :: (?cfg::CompilerConfig) => DatalogProgram -> Apply -> ProgNode
 compileApplyNode d Apply{..} = ApplyNode $
-    "{fn transformer() -> Box<dyn for<'a> Fn(&mut FnvHashMap<RelId, collection::Collection<scopes::Child<'a, worker::Worker<communication::Allocator>, TS>,DDValue,Weight>>)> {" $$
+    "{fn transformer() -> Box<dyn for<'a> Fn(&mut std::collections::BTreeMap<RelId, collection::Collection<scopes::Child<'a, worker::Worker<communication::Allocator>, TS>,Value,Weight>>)> {" $$
     "    Box::new(|collections| {"                                                                                                                             $$
     "        let (" <> commaSep outputs <> ") =" <+> rname applyTransformer <> (parens $ commaSep inputs) <> ";"                                               $$
     (nest' $ nest' $ vcat update_collections)                                                                                                                  $$

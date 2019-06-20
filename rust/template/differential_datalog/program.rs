@@ -77,6 +77,8 @@ type TKeyAgent<S> = TraceAgent<KeyTrace<S>>;
 
 type TValEnter<'a, P, T> = TraceEnter<TValAgent<P>, T>;
 type TKeyEnter<'a, P, T> = TraceEnter<TKeyAgent<P>, T>;
+use dogsdogsdogs::altneu::AltNeu;
+use dogsdogsdogs::operators::propose;
 
 /* 16-bit timestamp.
  * TODO: get rid of this and use `u16` directly when/if differential implements
@@ -211,7 +213,7 @@ pub struct Program {
 }
 
 type TransformerMap<'a> =
-    FnvHashMap<RelId, Collection<Child<'a, Worker<Allocator>, TS>, DDValue, Weight>>;
+    BTreeMap<RelId, Collection<Child<'a, Worker<Allocator>, TS>, DDValue, Weight>>;
 
 /// Represents a dataflow fragment implemented outside of DDlog directly in
 /// differential-dataflow.  Takes the set of already constructed collections and modifies this
@@ -320,9 +322,19 @@ pub type SemijoinFunc = fn(&DDValue, &DDValue, &()) -> Option<DDValue>;
 /// Aggregation function: aggregates multiple values into a single value.
 pub type AggFunc = fn(&DDValue, &[(&DDValue, Weight)]) -> DDValue;
 
+/// (see `DeltaOp::Join`)
+pub type ProposeFunc<V> = fn((V, V)) -> Option<V>;
+
+/// (see `DeltaOp::Semijoin`)
+pub type SemiProposeFunc<V> = fn((V, ())) -> Option<V>;
+
+/// Like `MapFunc`, but operates on a reference
+/// (see `DeltaOp::Join`)
+pub type RefMapFunc<V> = fn(&V) -> V;
+
 /// A Datalog relation or rule can depend on other relations and their
 /// arrangements.
-#[derive(Copy, PartialEq, Eq, Hash, Debug, Clone)]
+#[derive(Copy, PartialEq, Eq, Hash, Ord, PartialOrd, Debug, Clone)]
 pub enum Dep {
     Rel(RelId),
     Arr(ArrId),
@@ -424,25 +436,25 @@ impl XFormArrangement {
         }
     }
 
-    fn dependencies(&self) -> FnvHashSet<Dep> {
+    fn dependencies(&self) -> BTreeSet<Dep> {
         match self {
             XFormArrangement::FlatMap { next, .. } => match **next {
-                None => FnvHashSet::default(),
+                None => BTreeSet::new(),
                 Some(ref n) => n.dependencies(),
             },
             XFormArrangement::FilterMap { next, .. } => match **next {
-                None => FnvHashSet::default(),
+                None => BTreeSet::new(),
                 Some(ref n) => n.dependencies(),
             },
             XFormArrangement::Aggregate { next, .. } => match **next {
-                None => FnvHashSet::default(),
+                None => BTreeSet::new(),
                 Some(ref n) => n.dependencies(),
             },
             XFormArrangement::Join {
                 arrangement, next, ..
             } => {
                 let mut deps = match **next {
-                    None => FnvHashSet::default(),
+                    None => BTreeSet::new(),
                     Some(ref n) => n.dependencies(),
                 };
                 deps.insert(Dep::Arr(*arrangement));
@@ -452,7 +464,7 @@ impl XFormArrangement {
                 arrangement, next, ..
             } => {
                 let mut deps = match **next {
-                    None => FnvHashSet::default(),
+                    None => BTreeSet::new(),
                     Some(ref n) => n.dependencies(),
                 };
                 deps.insert(Dep::Arr(*arrangement));
@@ -462,7 +474,7 @@ impl XFormArrangement {
                 arrangement, next, ..
             } => {
                 let mut deps = match **next {
-                    None => FnvHashSet::default(),
+                    None => BTreeSet::new(),
                     Some(ref n) => n.dependencies(),
                 };
                 deps.insert(Dep::Arr(*arrangement));
@@ -518,26 +530,102 @@ impl XFormCollection {
         }
     }
 
-    pub fn dependencies(&self) -> FnvHashSet<Dep> {
+    pub fn dependencies(&self) -> BTreeSet<Dep> {
         match self {
             XFormCollection::Arrange { next, .. } => next.dependencies(),
             XFormCollection::Map { next, .. } => match **next {
-                None => FnvHashSet::default(),
+                None => BTreeSet::new(),
                 Some(ref n) => n.dependencies(),
             },
             XFormCollection::FlatMap { next, .. } => match **next {
-                None => FnvHashSet::default(),
+                None => BTreeSet::new(),
                 Some(ref n) => n.dependencies(),
             },
             XFormCollection::Filter { next, .. } => match **next {
-                None => FnvHashSet::default(),
+                None => BTreeSet::new(),
                 Some(ref n) => n.dependencies(),
             },
             XFormCollection::FilterMap { next, .. } => match **next {
-                None => FnvHashSet::default(),
+                None => BTreeSet::new(),
                 Some(ref n) => n.dependencies(),
             },
         }
+    }
+}
+
+/// `Old` = collection delayed by one time unit
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum OldNew {
+    Old,
+    New,
+}
+
+#[derive(Clone)]
+pub struct DeltaRule<V: Val> {
+    pub rel: RelId,
+    pub fmfun: &'static FilterMapFunc<V>,
+    pub ops: Vec<DeltaOp<V>>,
+}
+
+#[derive(Clone)]
+pub enum DeltaOp<V: Val> {
+    /// Join an input collection (that contains changes computed so far) with
+    /// matching elements of an arrangement and filter results through a function.
+    Join {
+        /// Extract key from input collection
+        keyfunc: &'static RefMapFunc<V>,
+        arrangement: ArrId,
+        /// `Old` - delay arrangement by one timestamp
+        timestamp: OldNew,
+        /// Map a pair of values (from the input collection and the arrangement)
+        /// into proposed output value
+        pfunc: &'static ProposeFunc<V>,
+    },
+    /// Semijoin an input collection (that contains changes computed so far) with
+    /// matching elements of an arrangement and filter results through a function.
+    Semijoin {
+        /// Extract key from input collection
+        keyfunc: &'static RefMapFunc<V>,
+        arrangement: ArrId,
+        /// `Old` - delay arrangement by one timestamp
+        timestamp: OldNew,
+        /// Map a value from the input collection into proposed output value
+        pfunc: &'static SemiProposeFunc<V>,
+    },
+}
+//                  | DeltaAntijoin<V>
+
+impl<V: Val> DeltaOp<V> {
+    fn arrangement(&self) -> ArrId {
+        match self {
+            DeltaOp::Join { arrangement, .. } => *arrangement,
+            DeltaOp::Semijoin { arrangement, .. } => *arrangement,
+        }
+    }
+
+    fn timestamp(&self) -> OldNew {
+        match self {
+            DeltaOp::Join { timestamp, .. } => *timestamp,
+            DeltaOp::Semijoin { timestamp, .. } => *timestamp,
+        }
+    }
+}
+
+impl<V: Val> DeltaRule<V> {
+    fn dependencies(&self) -> BTreeSet<Dep> {
+        let mut deps = BTreeSet::new();
+        deps.insert(Dep::Rel(self.rel));
+        for op in self.ops.iter() {
+            match op {
+                DeltaOp::Join { arrangement, .. } => {
+                    deps.insert(Dep::Arr(*arrangement));
+                }
+                DeltaOp::Semijoin { arrangement, .. } => {
+                    deps.insert(Dep::Arr(*arrangement));
+                }
+            }
+        }
+        deps
     }
 }
 
@@ -555,6 +643,10 @@ pub enum Rule {
         arr: ArrId,
         xform: XFormArrangement,
     },
+    DeltaRule {
+        description: String,
+        deltas: Vec<DeltaRule<V>>,
+    },
 }
 
 impl Rule {
@@ -562,14 +654,15 @@ impl Rule {
         match self {
             Rule::CollectionRule { description, .. } => description.as_ref(),
             Rule::ArrangementRule { description, .. } => description.as_ref(),
+            Rule::DeltaRule { description, .. } => description.as_ref(),
         }
     }
 
-    fn dependencies(&self) -> FnvHashSet<Dep> {
+    fn dependencies(&self) -> BTreeSet<Dep> {
         match self {
             Rule::CollectionRule { rel, xform, .. } => {
                 let mut deps = match xform {
-                    None => FnvHashSet::default(),
+                    None => BTreeSet::new(),
                     Some(ref x) => x.dependencies(),
                 };
                 deps.insert(Dep::Rel(*rel));
@@ -578,6 +671,15 @@ impl Rule {
             Rule::ArrangementRule { arr, xform, .. } => {
                 let mut deps = xform.dependencies();
                 deps.insert(Dep::Arr(*arr));
+                deps
+            }
+            Rule::DeltaRule { deltas, .. } => {
+                let mut deps = BTreeSet::new();
+                for r in deltas.iter() {
+                    for dep in r.dependencies().into_iter() {
+                        deps.insert(dep);
+                    }
+                }
                 deps
             }
         }
@@ -750,11 +852,11 @@ where
     T: Refines<P::Timestamp> + Lattice + Timestamp + Ord,
     'a: 'b,
 {
-    arrangements1: &'b FnvHashMap<
+    arrangements1: &'b BTreeMap<
         ArrId,
         ArrangedCollection<Child<'a, P, T>, TValAgent<Child<'a, P, T>>, TKeyAgent<Child<'a, P, T>>>,
     >,
-    arrangements2: &'b FnvHashMap<
+    arrangements2: &'b BTreeMap<
         ArrId,
         ArrangedCollection<Child<'a, P, T>, TValEnter<'a, P, T>, TKeyEnter<'a, P, T>>,
     >,
@@ -1140,9 +1242,9 @@ impl Program {
                     };
 
                     let (mut all_sessions, mut traces) = worker.dataflow::<TS,_,_>(|outer: &mut Child<Worker<Allocator>, TS>| -> Result<_, String> {
-                        let mut sessions : FnvHashMap<RelId, InputSession<TS, DDValue, Weight>> = FnvHashMap::default();
-                        let mut collections : FnvHashMap<RelId, Collection<Child<Worker<Allocator>, TS>,DDValue,Weight>> = FnvHashMap::default();
-                        let mut arrangements = FnvHashMap::default();
+                        let mut sessions : BTreeMap<RelId, InputSession<TS, DDValue, Weight>> = BTreeMap::new();
+                        let mut collections : BTreeMap<RelId, Collection<Child<Worker<Allocator>, TS>,DDValue,Weight>> = BTreeMap::new();
+                        let mut arrangements = BTreeMap::new();
                         for (nodeid, node) in prog.nodes.iter().enumerate() {
                             match node {
                                 ProgNode::Rel{rel} => {
@@ -1157,9 +1259,9 @@ impl Program {
                                     };
                                     /* apply rules */
                                     let mut rule_collections: Vec<_> = rel.rules.iter().map(|rule| {
-                                        prog.mk_rule(rule, |rid| collections.get(&rid),
+                                        prog.mk_rule(outer, rule, |rid| collections.get(&rid),
                                                      Arrangements{arrangements1: &arrangements,
-                                                     arrangements2: &FnvHashMap::default()})
+                                                     arrangements2: &BTreeMap::default()})
 
                                     }).collect();
                                     rule_collections.push(collection);
@@ -1192,13 +1294,13 @@ impl Program {
                                     /* create a nested scope for mutually recursive relations */
                                     let new_collections = outer.scoped("recursive component", |inner| -> Result<_, String> {
                                         /* create variables for relations defined in the SCC. */
-                                        let mut vars = FnvHashMap::default();
+                                        let mut vars = BTreeMap::new();
                                         /* arrangements created inside the nested scope */
-                                        let mut local_arrangements = FnvHashMap::default();
+                                        let mut local_arrangements = BTreeMap::new();
                                         /* arrangements entered from global scope */
-                                        let mut inner_arrangements = FnvHashMap::default();
+                                        let mut inner_arrangements = BTreeMap::new();
                                         /* collections entered from global scope */
-                                        let mut inner_collections = FnvHashMap::default();
+                                        let mut inner_collections = BTreeMap::new();
                                         for r in rels.iter() {
                                             let var = Variable::from(&collections
                                                 .get(&r.rel.id)
@@ -1243,7 +1345,7 @@ impl Program {
                                         for rel in rels {
                                             for rule in &rel.rel.rules {
                                                 let c = prog.mk_rule(
-                                                    rule,
+                                                    inner, rule,
                                                     |rid| vars.get(&rid).map(|v|&(**v)).or_else(|| inner_collections.get(&rid)),
                                                     Arrangements{arrangements1: &local_arrangements,
                                                                  arrangements2: &inner_arrangements});
@@ -1255,7 +1357,7 @@ impl Program {
 
                                         };
                                         /* bring new relations back to the outer scope */
-                                        let mut new_collections = FnvHashMap::default();
+                                        let mut new_collections = BTreeMap::new();
                                         for rel in rels {
                                             let var = vars
                                                 .get(&rel.rel.id)
@@ -1340,8 +1442,8 @@ impl Program {
 
                     // Close session handles for non-input sessions;
                     // close all sessions for workers other than worker 0.
-                    let mut sessions: FnvHashMap<RelId, InputSession<TS, DDValue, Weight>> =
-                        all_sessions.drain().filter(|(relid,_)| worker_index == 0 && prog.get_relation(*relid).input).collect();
+                    let mut sessions: BTreeMap<RelId, InputSession<TS, DDValue, Weight>> =
+                        all_sessions.into_iter().filter(|(relid,_)| worker_index == 0 && prog.get_relation(*relid).input).collect();
 
                     /* Only worker 0 receives data */
                     if worker_index == 0 {
@@ -1531,7 +1633,7 @@ impl Program {
 
     /* Advance the epoch on all input sessions */
     fn advance<Tr>(
-        sessions: &mut FnvHashMap<RelId, InputSession<TS, DDValue, Weight>>,
+        sessions: &mut BTreeMap<RelId, InputSession<TS, DDValue, Weight>>,
         traces: &mut BTreeMap<ArrId, Tr>,
         epoch: TS,
     ) where
@@ -1551,7 +1653,7 @@ impl Program {
 
     /* Propagate all changes through the pipeline */
     fn flush(
-        sessions: &mut FnvHashMap<RelId, InputSession<TS, DDValue, Weight>>,
+        sessions: &mut BTreeMap<RelId, InputSession<TS, DDValue, Weight>>,
         probe: &ProbeHandle<TS>,
         worker: &mut Worker<Allocator>,
         peers: &FnvHashMap<usize, thread::Thread>,
@@ -1745,8 +1847,8 @@ impl Program {
     }
 
     /* Return all relations required to compute rels, excluding recursive dependencies on rels */
-    fn dependencies(rels: &[&Relation]) -> FnvHashSet<Dep> {
-        let mut result = FnvHashSet::default();
+    fn dependencies(rels: &[&Relation]) -> BTreeSet<Dep> {
+        let mut result = BTreeSet::new();
         for rel in rels {
             for rule in &rel.rules {
                 result = result.union(&rule.dependencies()).cloned().collect();
@@ -1984,17 +2086,18 @@ impl Program {
     }
 
     /* Compile right-hand-side of a rule to a collection */
-    fn mk_rule<'a, 'b, P, T, F>(
+    fn mk_rule<'a, 'b, 'c, P, T, F>(
         &self,
+        scope: &mut Child<'c, P, T>,
         rule: &Rule,
         lookup_collection: F,
-        arrangements: Arrangements<'a, 'b, P, T>,
-    ) -> Collection<Child<'a, P, T>, DDValue, Weight>
+        arrangements: Arrangements<'c, 'b, P, T>,
+    ) -> Collection<Child<'c, P, T>, DDValue, Weight>
     where
         P: ScopeParent + 'a,
         P::Timestamp: Lattice,
         T: Refines<P::Timestamp> + Lattice + Timestamp + Ord,
-        F: Fn(RelId) -> Option<&'b Collection<Child<'a, P, T>, DDValue, Weight>>,
+        F: Fn(RelId) -> Option<&'b Collection<Child<'c, P, T>, DDValue, Weight>>,
         'a: 'b,
     {
         match rule {
@@ -2027,6 +2130,246 @@ impl Program {
                 }
                 _ => panic!("Rule starts with a set arrangement {:?}", *arr),
             },
+            Rule::DeltaRule {
+                description,
+                deltas,
+            } => {
+                /* Create dataflow for delta query of the form:
+                 * dQ/dE1 = dE1, E2', E3',... .
+                 * dQ/dE2 = dE2, E1, E3',... .
+                 * dQ/dE3 = dE3, E1, E2,... .
+                 * ...
+                 * where `dEi` are collections that represent streams of changes to relations `Ei`,
+                 * `Ei` and `Ei'` are arrangements of `Ei` at the previous and current timestamps
+                 * respectively.
+                 */
+                scope.scoped::<AltNeu<T>, _, _>(description, |inner| {
+                    /* Import `dE1`, ..., `dEn` in the nested scope */
+                    let local_collections: BTreeMap<RelId, Collection<_, _, _>> = {
+                        let mut local_collections = BTreeMap::new();
+                        for dep in rule.dependencies().iter() {
+                            if let Dep::Rel(relid) = dep {
+                                local_collections.insert(
+                                    *relid,
+                                    lookup_collection(*relid)
+                                        .unwrap_or_else(|| {
+                                            panic!("mk_rule: unknown relation {:?}", *relid)
+                                        })
+                                        .enter(inner),
+                                );
+                            }
+                        }
+                        local_collections
+                    };
+
+                    /* Import `Ei`, `Ei'` in the nested scope */
+                    let mut local_arrangements_alt1: BTreeMap<(ArrId, OldNew), Arranged<_, _>> =
+                        BTreeMap::new();
+                    let mut local_arrangements_neu1: BTreeMap<(ArrId, OldNew), Arranged<_, _>> =
+                        BTreeMap::new();
+                    let mut local_arrangements_alt2: BTreeMap<(ArrId, OldNew), Arranged<_, _>> =
+                        BTreeMap::new();
+                    let mut local_arrangements_neu2: BTreeMap<(ArrId, OldNew), Arranged<_, _>> =
+                        BTreeMap::new();
+                    let mut local_semi_arrangements_alt1: BTreeMap<
+                        (ArrId, OldNew),
+                        Arranged<_, _>,
+                    > = BTreeMap::new();
+                    let mut local_semi_arrangements_neu1: BTreeMap<
+                        (ArrId, OldNew),
+                        Arranged<_, _>,
+                    > = BTreeMap::new();
+                    let mut local_semi_arrangements_alt2: BTreeMap<
+                        (ArrId, OldNew),
+                        Arranged<_, _>,
+                    > = BTreeMap::new();
+                    let mut local_semi_arrangements_neu2: BTreeMap<
+                        (ArrId, OldNew),
+                        Arranged<_, _>,
+                    > = BTreeMap::new();
+                    {
+                        /* Arrangements used by the rule along with timestamps when we need them. */
+                        let mut arrdeps: BTreeSet<(ArrId, OldNew)> = BTreeSet::new();
+                        for delta_rule in deltas.iter() {
+                            for op in delta_rule.ops.iter() {
+                                arrdeps.insert((op.arrangement(), op.timestamp()));
+                            }
+                        }
+                        for (arr, ts) in arrdeps.iter() {
+                            let alt: (for<'r, 's, 't0> fn(&'r V, &'s V, &'t0 T) -> _) =
+                                |_, _, t| AltNeu::alt(t.clone());
+                            let neu: (for<'r, 's, 't0> fn(&'r V, &'s V, &'t0 T) -> _) =
+                                |_, _, t| AltNeu::neu(t.clone());
+                            let semi_alt: (for<'r, 's, 't0> fn(&'r V, &'s (), &'t0 T) -> _) =
+                                |_, _, t| AltNeu::alt(t.clone());
+                            let semi_neu: (for<'r, 's, 't0> fn(&'r V, &'s (), &'t0 T) -> _) =
+                                |_, _, t| AltNeu::neu(t.clone());
+                            match arrangements.lookup_arr(*arr) {
+                                A::Arrangement1(ArrangedCollection::Map(arranged)) => match ts {
+                                    OldNew::Old => {
+                                        local_arrangements_alt1
+                                            .insert((*arr, *ts), arranged.enter_at(inner, alt));
+                                    }
+                                    OldNew::New => {
+                                        local_arrangements_neu1
+                                            .insert((*arr, *ts), arranged.enter_at(inner, neu));
+                                    }
+                                },
+                                A::Arrangement2(ArrangedCollection::Map(arranged)) => match ts {
+                                    OldNew::Old => {
+                                        local_arrangements_alt2
+                                            .insert((*arr, *ts), arranged.enter_at(inner, alt));
+                                    }
+                                    OldNew::New => {
+                                        local_arrangements_neu2
+                                            .insert((*arr, *ts), arranged.enter_at(inner, neu));
+                                    }
+                                },
+                                A::Arrangement1(ArrangedCollection::Set(arranged)) => match ts {
+                                    OldNew::Old => {
+                                        local_semi_arrangements_alt1.insert(
+                                            (*arr, *ts),
+                                            arranged.enter_at(inner, semi_alt),
+                                        );
+                                    }
+                                    OldNew::New => {
+                                        local_semi_arrangements_neu1.insert(
+                                            (*arr, *ts),
+                                            arranged.enter_at(inner, semi_neu),
+                                        );
+                                    }
+                                },
+                                A::Arrangement2(ArrangedCollection::Set(arranged)) => match ts {
+                                    OldNew::Old => {
+                                        local_semi_arrangements_alt2.insert(
+                                            (*arr, *ts),
+                                            arranged.enter_at(inner, semi_alt),
+                                        );
+                                    }
+                                    OldNew::New => {
+                                        local_semi_arrangements_neu2.insert(
+                                            (*arr, *ts),
+                                            arranged.enter_at(inner, semi_neu),
+                                        );
+                                    }
+                                },
+                            };
+                        }
+                    };
+
+                    let mut diffs: Vec<Collection<_, _, _>> = Vec::new();
+                    for delta_rule in deltas.iter() {
+                        /* dQ/dEi = dEi, E2', E3',... .
+                         */
+                        let prefix = local_collections
+                            .get(&delta_rule.rel)
+                            .unwrap_or_else(|| {
+                                panic!("mk_rule: unknown local relation {:?}", &delta_rule.rel)
+                            })
+                            .flat_map(delta_rule.fmfun);
+                        let mut changes = None;
+                        for op in delta_rule.ops.iter() {
+                            changes = Some(match op {
+                                DeltaOp::Join {
+                                    keyfunc,
+                                    arrangement,
+                                    timestamp,
+                                    pfunc,
+                                } => match timestamp {
+                                    OldNew::Old => {
+                                        match local_arrangements_alt1
+                                            .get(&(*arrangement, *timestamp))
+                                        {
+                                            Some(arranged) => propose(
+                                                changes.as_ref().unwrap_or(&prefix),
+                                                arranged.clone(),
+                                                *keyfunc,
+                                            ),
+                                            None => propose(
+                                                changes.as_ref().unwrap_or(&prefix),
+                                                local_arrangements_alt2
+                                                    .get(&(*arrangement, *timestamp))
+                                                    .unwrap()
+                                                    .clone(),
+                                                *keyfunc,
+                                            ),
+                                        }
+                                    }
+                                    OldNew::New => {
+                                        match local_arrangements_neu1
+                                            .get(&(*arrangement, *timestamp))
+                                        {
+                                            Some(arranged) => propose(
+                                                changes.as_ref().unwrap_or(&prefix),
+                                                arranged.clone(),
+                                                *keyfunc,
+                                            ),
+                                            None => propose(
+                                                changes.as_ref().unwrap_or(&prefix),
+                                                local_arrangements_neu2
+                                                    .get(&(*arrangement, *timestamp))
+                                                    .unwrap()
+                                                    .clone(),
+                                                *keyfunc,
+                                            ),
+                                        }
+                                    }
+                                }
+                                .flat_map(*pfunc),
+                                DeltaOp::Semijoin {
+                                    keyfunc,
+                                    arrangement,
+                                    timestamp,
+                                    pfunc,
+                                } => match timestamp {
+                                    OldNew::Old => {
+                                        match local_semi_arrangements_alt1
+                                            .get(&(*arrangement, *timestamp))
+                                        {
+                                            Some(arranged) => propose(
+                                                changes.as_ref().unwrap_or(&prefix),
+                                                arranged.clone(),
+                                                *keyfunc,
+                                            ),
+                                            None => propose(
+                                                changes.as_ref().unwrap_or(&prefix),
+                                                local_semi_arrangements_alt2
+                                                    .get(&(*arrangement, *timestamp))
+                                                    .unwrap()
+                                                    .clone(),
+                                                *keyfunc,
+                                            ),
+                                        }
+                                    }
+                                    OldNew::New => {
+                                        match local_semi_arrangements_neu1
+                                            .get(&(*arrangement, *timestamp))
+                                        {
+                                            Some(arranged) => propose(
+                                                changes.as_ref().unwrap_or(&prefix),
+                                                arranged.clone(),
+                                                *keyfunc,
+                                            ),
+                                            None => propose(
+                                                changes.as_ref().unwrap_or(&prefix),
+                                                local_semi_arrangements_neu2
+                                                    .get(&(*arrangement, *timestamp))
+                                                    .unwrap()
+                                                    .clone(),
+                                                *keyfunc,
+                                            ),
+                                        }
+                                    }
+                                }
+                                .flat_map(*pfunc),
+                            })
+                        }
+                        diffs.push(changes.unwrap_or_else(|| prefix.clone()));
+                    }
+                    /* Concatenate all diffs */
+                    concatenate_collections(inner, diffs.into_iter()).leave()
+                })
+            }
         }
     }
 }
