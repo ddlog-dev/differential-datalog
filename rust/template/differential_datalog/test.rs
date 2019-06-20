@@ -21,7 +21,7 @@ use std::iter::FromIterator;
 use std::sync::{Arc, Mutex};
 
 use abomonation::Abomonation;
-use fnv::FnvHashMap;
+use fnv::FnvHashSet;
 use serde::Deserialize;
 use serde::Serialize;
 use timely::communication::Allocator;
@@ -93,6 +93,7 @@ enum Value {
     i64(i64),
     BoolTuple((bool, bool)),
     Tuple2(Box<Value>, Box<Value>),
+    Tuple3(Box<Value>, Box<Value>, Box<Value>),
     Q(Q),
     S(S),
 }
@@ -116,6 +117,10 @@ fn _filter_fun1(v: &Value) -> bool {
         Value::S(S::S1 { .. }) => true,
         _ => false,
     }
+}
+
+fn filter_map_ident(v: Value) -> Option<Value> {
+    Some(v)
 }
 
 fn some_fun(x: &u32) -> u32 {
@@ -294,40 +299,6 @@ fn arrange_fun1(v: Value) -> Option<(Value, Value)> {
     match v {
         Value::Tuple2(v1,v2) => Some((*v1, *v2)),
         _ => None
-    }
-}*/
-
-/*fn set_update(s: &Arc<Mutex<Delta>>, ds: &Arc<Mutex<DeltaSet<Value>>>, x : &Value, insert: bool)
-{
-    //println!("xupd {:?} {}", *x, w);
-    if insert {
-        let mut s = s.lock().unwrap();
-        let new = s.insert(x.clone());
-        if new {
-            let mut ds = ds.lock().unwrap();
-            let e = ds.entry(x.clone());
-            match e {
-                hash_map::Entry::Occupied(mut oe) => {
-                    debug_assert!(*oe.get_mut() == -1);
-                    oe.remove_entry();
-                },
-                hash_map::Entry::Vacant(ve) => {ve.insert(1);}
-            }
-        };
-    } else {
-        let mut s = s.lock().unwrap();
-        let present = s.remove(x);
-        if present {
-            let mut ds = ds.lock().unwrap();
-            let e = ds.entry(x.clone());
-            match e {
-                hash_map::Entry::Occupied(mut oe) => {
-                    debug_assert!(*oe.get_mut() == 1);
-                    oe.remove_entry();
-                },
-                hash_map::Entry::Vacant(ve) => {ve.insert(-1);}
-            }
-        };
     }
 }*/
 
@@ -515,11 +486,10 @@ fn test_one_relation_1() {
     test_one_relation(1)
 }
 
-/*
 #[test]
 fn test_one_relation_multi() {
     test_one_relation(16)
-}*/
+}
 
 /* Two tables + 1 rule that keeps the two synchronized
  */
@@ -847,7 +817,7 @@ fn test_join(nthreads: usize) {
 
     fn join_transformer() -> Box<
         dyn for<'a> Fn(
-            &mut FnvHashMap<RelId, Collection<Child<'a, Worker<Allocator>, TS>, Value, Weight>>,
+            &mut BTreeMap<RelId, Collection<Child<'a, Worker<Allocator>, TS>, Value, Weight>>,
         ),
     > {
         Box::new(|collections| {
@@ -1094,6 +1064,516 @@ fn test_antijoin_1() {
 #[test]
 fn test_antijoin_multi() {
     test_antijoin(16)
+}
+
+/* Delta queries 1
+ */
+fn test_delta(nthreads: usize) {
+    let relset1: Arc<Mutex<Delta>> = Arc::new(Mutex::new(BTreeMap::default()));
+    let rel1 = {
+        let relset1 = relset1.clone();
+        Relation {
+            name: "T1".to_string(),
+            input: true,
+            distinct: true,
+            key_func: None,
+            id: 1,
+            rules: Vec::new(),
+            arrangements: vec![
+                Arrangement::Map {
+                    name: "(_0,_)".to_string(),
+                    afun: &(afun1 as ArrangeFunc<Value>),
+                    queryable: false
+                },
+                Arrangement::Map {
+                    name: "(_,_0)".to_string(),
+                    afun: &(afun2 as ArrangeFunc<Value>),
+                    queryable: false
+                },
+                Arrangement::Map {
+                    name: "(_0,_1)".to_string(),
+                    afun: &(afun3 as ArrangeFunc<Value>),
+                    queryable: false
+                },
+                Arrangement::Map {
+                    name: "(_1,_0)".to_string(),
+                    afun: &(afun4 as ArrangeFunc<Value>),
+                    queryable: false
+                },
+            ],
+            change_cb: Some(Arc::new(Mutex::new(Box::new(move |_, v, pol| {
+                set_update("T1", &relset1, v, pol)
+            })))),
+        }
+    };
+    fn afun1(v: Value) -> Option<(Value, Value)> {
+        let (v1, v) = match &v {
+            Value::Tuple2(v1, _) => ((**v1).clone(), v.clone()),
+            _ => return None,
+        };
+        Some((v1, v))
+    }
+    fn afun2(v: Value) -> Option<(Value, Value)> {
+        let (v2, v) = match &v {
+            Value::Tuple2(_, v2) => ((**v2).clone(), v.clone()),
+            _ => return None,
+        };
+        Some((v2, v))
+    }
+    fn afun3(v: Value) -> Option<(Value, Value)> {
+        Some((v.clone(), v))
+    }
+    fn afun4(v: Value) -> Option<(Value, Value)> {
+        let (k, val) = match &v {
+            Value::Tuple2(v1, v2) => (Value::Tuple2(v2.clone(), v1.clone()), v.clone()),
+            _ => return None,
+        };
+        Some((k, val))
+    }
+
+    fn sel_both(v: &Value) -> Value {
+        match &v {
+            Value::Tuple2(x, y) => Value::Tuple2(x.clone(), y.clone()),
+            _ => panic!("delta.sel_both: not a Tuple 2"),
+        }
+    }
+    fn sel_reverse(v: &Value) -> Value {
+        match &v {
+            Value::Tuple2(x, y) => Value::Tuple2(y.clone(), x.clone()),
+            _ => panic!("delta.sel_reverese: not a Tuple 2"),
+        }
+    }
+
+    fn propose2(pair: (Value, Value)) -> Option<Value> {
+        Some(pair.0)
+    }
+
+    fn propose5(pair: (Value, Value)) -> Option<Value> {
+        Some(pair.1)
+    }
+
+    let output_set: Arc<Mutex<Delta>> = Arc::new(Mutex::new(BTreeMap::default()));
+    let output = {
+        let output_set = output_set.clone();
+        Relation {
+            name: "Output".to_string(),
+            input: false,
+            distinct: true,
+            key_func: None,
+            id: 2,
+            rules: vec![Rule::DeltaRule {
+                description: "Output(x,y) :- T1(x,y), T1(y,x)".to_string(),
+                deltas: vec![
+                    /* dOutput/dT1(x,y) = dT1(x,y), T1'(y,x). */
+                    DeltaRule {
+                        rel: 1,
+                        fmfun: &(filter_map_ident as FilterMapFunc<Value>),
+                        ops: vec![DeltaOp::Join {
+                            keyfunc: &(sel_both as RefMapFunc<Value>),
+                            arrangement: (1, 3),
+                            timestamp: OldNew::New,
+                            pfunc: &(propose2 as ProposeFunc<Value>),
+                        }],
+                    },
+                    /* dOutput/dT1(y,x) = dT1(y,x), T1(x,y) */
+                    DeltaRule {
+                        rel: 1,
+                        fmfun: &(filter_map_ident as FilterMapFunc<Value>),
+                        ops: vec![DeltaOp::Join {
+                            keyfunc: &(sel_reverse as RefMapFunc<Value>),
+                            arrangement: (1, 2),
+                            timestamp: OldNew::Old,
+                            pfunc: &(propose5 as ProposeFunc<Value>),
+                        }],
+                    },
+                ],
+            }],
+            arrangements: vec![],
+            change_cb: Some(Arc::new(Mutex::new(Box::new(move |_, v, pol| {
+                //eprintln!("v: {:?}, pol: {}", *v, pol);
+                set_update("Output", &output_set, v, pol)
+            })))),
+        }
+    };
+
+    let prog: Program<Value> = Program {
+        nodes: vec![ProgNode::Rel { rel: rel1 }, ProgNode::Rel { rel: output }],
+        init_data: vec![
+            (
+                1,
+                Value::Tuple2(Box::new(Value::u64(1)), Box::new(Value::u64(2))),
+            ),
+            (
+                1,
+                Value::Tuple2(Box::new(Value::u64(2)), Box::new(Value::u64(1))),
+            ),
+        ],
+    };
+
+    let mut running = prog.run(nthreads).unwrap();
+
+    //let edges:Vec<(u64,u64)> = vec![(1,2), (2,1)];
+    //let edge_set = FnvHashSet::from_iter(edges.iter().map(|(x,y)| Value::Tuple2(Box::new(Value::u64(*x)),Box::new(Value::u64(*y)))));
+
+    let expected_output: Vec<(u64, u64)> = vec![(1, 2), (2, 1)];
+    let expected_output_set = BTreeMap::from_iter(expected_output.iter().map(|(x, y)| {
+        (
+            Value::Tuple2(Box::new(Value::u64(*x)), Box::new(Value::u64(*y))),
+            1,
+        )
+    }));
+    /* 1. Initial */
+    //    running.transaction_start().unwrap();
+    //    let mut updates: Vec<Update<Value>> = Vec::new();
+    //    for v in &edge_set {
+    //        updates.push(Update::Insert{relid: 1, v: v.clone()});
+    //        //running.insert(1, v.clone()).unwrap();
+    //    };
+    //    running.apply_updates(updates).unwrap();
+    //    running.transaction_commit().unwrap();
+    //
+    assert_eq!(*output_set.lock().unwrap(), expected_output_set);
+
+    running.stop().unwrap();
+}
+
+#[test]
+fn test_delta_1() {
+    test_delta(1)
+}
+
+#[test]
+fn test_delta_multi() {
+    test_delta(128)
+}
+
+/* Delta queries 2
+ */
+fn test_triangles(nthreads: usize) {
+    let relset1: Arc<Mutex<Delta>> = Arc::new(Mutex::new(BTreeMap::default()));
+    let rel1 = {
+        let relset1 = relset1.clone();
+        Relation {
+            name: "T1".to_string(),
+            input: true,
+            distinct: true,
+            key_func: None,
+            id: 1,
+            rules: Vec::new(),
+            arrangements: vec![
+                Arrangement::Map {
+                    name: "(_0,_)".to_string(),
+                    afun: &(afun1 as ArrangeFunc<Value>),
+                    queryable: false
+                },
+                Arrangement::Map {
+                    name: "(_,_0)".to_string(),
+                    afun: &(afun2 as ArrangeFunc<Value>),
+                    queryable: false
+                },
+                Arrangement::Map {
+                    name: "(_0,_1)".to_string(),
+                    afun: &(afun3 as ArrangeFunc<Value>),
+                    queryable: false
+                },
+            ],
+            change_cb: Some(Arc::new(Mutex::new(Box::new(move |_, v, pol| {
+                set_update("T1", &relset1, v, pol)
+            })))),
+        }
+    };
+    fn afun1(v: Value) -> Option<(Value, Value)> {
+        let (v1, v) = match &v {
+            Value::Tuple2(v1, _) => ((**v1).clone(), v.clone()),
+            _ => return None,
+        };
+        Some((v1, v))
+    }
+    fn afun2(v: Value) -> Option<(Value, Value)> {
+        let (v2, v) = match &v {
+            Value::Tuple2(_, v2) => ((**v2).clone(), v.clone()),
+            _ => return None,
+        };
+        Some((v2, v))
+    }
+    fn afun3(v: Value) -> Option<(Value, Value)> {
+        Some((v.clone(), v))
+    }
+
+    fn sel1(v: &Value) -> Value {
+        match &v {
+            Value::Tuple2(v1, _) => v1.as_ref().clone(),
+            _ => panic!("triangles.sel1: not a Tuple 2"),
+        }
+    }
+    fn sel2(v: &Value) -> Value {
+        match &v {
+            Value::Tuple2(_, v2) => v2.as_ref().clone(),
+            _ => panic!("triangles.sel2: not a Tuple 2"),
+        }
+    }
+    fn sel_xz(v: &Value) -> Value {
+        match &v {
+            Value::Tuple3(x, _, z) => Value::Tuple2(x.clone(), z.clone()),
+            _ => panic!("triangles.sel_xz: not a Tuple 3"),
+        }
+    }
+    fn sel_yz(v: &Value) -> Value {
+        match &v {
+            Value::Tuple3(_, y, z) => Value::Tuple2(y.clone(), z.clone()),
+            _ => panic!("triangles.sel_yz: not a Tuple 3"),
+        }
+    }
+
+    fn propose1(pair: (Value, Value)) -> Option<Value> {
+        match pair {
+            (Value::Tuple2(x, y), Value::Tuple2(_, z)) => {
+                Some(Value::Tuple3(x.clone(), y.clone(), z.clone()))
+            }
+            _ => None,
+        }
+    }
+
+    fn propose2(pair: (Value, Value)) -> Option<Value> {
+        Some(pair.0)
+    }
+
+    fn propose3(pair: (Value, Value)) -> Option<Value> {
+        match pair {
+            (Value::Tuple2(y, z), Value::Tuple2(x, _)) => {
+                Some(Value::Tuple3(x.clone(), y.clone(), z.clone()))
+            }
+            _ => None,
+        }
+    }
+
+    fn propose4(pair: (Value, Value)) -> Option<Value> {
+        match pair {
+            (Value::Tuple2(x, z), Value::Tuple2(_, y)) => {
+                Some(Value::Tuple3(x.clone(), y.clone(), z.clone()))
+            }
+            _ => None,
+        }
+    }
+
+    let triangle_set: Arc<Mutex<Delta>> = Arc::new(Mutex::new(BTreeMap::default()));
+    let triangle = {
+        let triangle_set = triangle_set.clone();
+        Relation {
+            name: "Triangle".to_string(),
+            input: false,
+            distinct: true,
+            key_func: None,
+            id: 2,
+            rules: vec![Rule::DeltaRule {
+                description: "Triangle(x,y,z) :- T1(x,y), T1(y,z), T1(x,z)".to_string(),
+                deltas: vec![
+                    /* dTriangle/dT1(x,y) = dT1(x,y), T1(y,z), T1(x,z) */
+                    DeltaRule {
+                        rel: 1,
+                        fmfun: &(filter_map_ident as FilterMapFunc<Value>),
+                        ops: vec![
+                            DeltaOp::Join {
+                                keyfunc: &(sel2 as RefMapFunc<Value>),
+                                arrangement: (1, 0),
+                                timestamp: OldNew::New,
+                                pfunc: &(propose1 as ProposeFunc<Value>),
+                            },
+                            DeltaOp::Join {
+                                keyfunc: &(sel_xz as RefMapFunc<Value>),
+                                arrangement: (1, 2),
+                                timestamp: OldNew::New,
+                                pfunc: &(propose2 as ProposeFunc<Value>),
+                            },
+                        ],
+                    },
+                    /* dTriangle/dT1(y,z) = dT1(y,z), T1(x,y), T1(x,z) */
+                    DeltaRule {
+                        rel: 1,
+                        fmfun: &(filter_map_ident as FilterMapFunc<Value>),
+                        ops: vec![
+                            DeltaOp::Join {
+                                keyfunc: &(sel1 as RefMapFunc<Value>),
+                                arrangement: (1, 1),
+                                timestamp: OldNew::Old,
+                                pfunc: &(propose3 as ProposeFunc<Value>),
+                            },
+                            DeltaOp::Join {
+                                keyfunc: &(sel_xz as RefMapFunc<Value>),
+                                arrangement: (1, 2),
+                                timestamp: OldNew::New,
+                                pfunc: &(propose2 as ProposeFunc<Value>),
+                            },
+                        ],
+                    },
+                    /* dTriangle/dT1(x,z) = dT1(x,z), T1(x,y), T1(y,z) */
+                    DeltaRule {
+                        rel: 1,
+                        fmfun: &(filter_map_ident as FilterMapFunc<Value>),
+                        ops: vec![
+                            DeltaOp::Join {
+                                keyfunc: &(sel1 as RefMapFunc<Value>),
+                                arrangement: (1, 0),
+                                timestamp: OldNew::Old,
+                                pfunc: &(propose4 as ProposeFunc<Value>),
+                            },
+                            DeltaOp::Join {
+                                keyfunc: &(sel_yz as RefMapFunc<Value>),
+                                arrangement: (1, 2),
+                                timestamp: OldNew::Old,
+                                pfunc: &(propose2 as ProposeFunc<Value>),
+                            },
+                        ],
+                    },
+                ],
+            }],
+            arrangements: vec![],
+            change_cb: Some(Arc::new(Mutex::new(Box::new(move |_, v, pol| {
+                //eprintln!("v: {:?}, pol: {}", *v, pol);
+                set_update("Triangle", &triangle_set, v, pol)
+            })))),
+        }
+    };
+
+    let prog: Program<Value> = Program {
+        nodes: vec![ProgNode::Rel { rel: rel1 }, ProgNode::Rel { rel: triangle }],
+        init_data: vec![],
+    };
+
+    let mut running = prog.run(nthreads).unwrap();
+
+    /* 1. Initial triangles */
+    let edges: Vec<(u64, u64)> = vec![(1, 2), (2, 3), (1, 3), (3, 4), (4, 1), (3, 1)];
+    let edge_set = FnvHashSet::from_iter(
+        edges
+            .iter()
+            .map(|(x, y)| Value::Tuple2(Box::new(Value::u64(*x)), Box::new(Value::u64(*y)))),
+    );
+
+    let expected_triangles: Vec<(u64, u64, u64)> = vec![(1, 2, 3), (3, 4, 1)];
+    let expected_triangle_set = BTreeMap::from_iter(expected_triangles.iter().map(|(x, y, z)| {
+        (
+            Value::Tuple3(
+                Box::new(Value::u64(*x)),
+                Box::new(Value::u64(*y)),
+                Box::new(Value::u64(*z)),
+            ),
+            1,
+        )
+    }));
+    running.transaction_start().unwrap();
+    for v in &edge_set {
+        running.insert(1, v.clone()).unwrap();
+    }
+    running.transaction_commit().unwrap();
+
+    assert_eq!(*triangle_set.lock().unwrap(), expected_triangle_set);
+
+    /* 2. Delete edge */
+    let delete_edges: Vec<(u64, u64)> = vec![(1, 3)];
+    let delete_edge_set = FnvHashSet::from_iter(
+        delete_edges
+            .iter()
+            .map(|(x, y)| Value::Tuple2(Box::new(Value::u64(*x)), Box::new(Value::u64(*y)))),
+    );
+
+    let expected_triangles2: Vec<(u64, u64, u64)> = vec![(3, 4, 1)];
+    let expected_triangle_set2 =
+        BTreeMap::from_iter(expected_triangles2.iter().map(|(x, y, z)| {
+            (
+                Value::Tuple3(
+                    Box::new(Value::u64(*x)),
+                    Box::new(Value::u64(*y)),
+                    Box::new(Value::u64(*z)),
+                ),
+                1,
+            )
+        }));
+
+    running.transaction_start().unwrap();
+    for x in &delete_edge_set {
+        running.delete_value(1, x.clone()).unwrap();
+    }
+    running.transaction_commit().unwrap();
+    assert_eq!(*triangle_set.lock().unwrap(), expected_triangle_set2);
+
+    /* 3. Insert edges */
+    let insert_edges: Vec<(u64, u64)> = vec![(1, 5), (5, 2)];
+    let insert_edge_set = FnvHashSet::from_iter(
+        insert_edges
+            .iter()
+            .map(|(x, y)| Value::Tuple2(Box::new(Value::u64(*x)), Box::new(Value::u64(*y)))),
+    );
+
+    let expected_triangles3: Vec<(u64, u64, u64)> = vec![(3, 4, 1), (1, 5, 2)];
+    let expected_triangle_set3 =
+        BTreeMap::from_iter(expected_triangles3.iter().map(|(x, y, z)| {
+            (
+                Value::Tuple3(
+                    Box::new(Value::u64(*x)),
+                    Box::new(Value::u64(*y)),
+                    Box::new(Value::u64(*z)),
+                ),
+                1,
+            )
+        }));
+
+    running.transaction_start().unwrap();
+    for x in &insert_edge_set {
+        running.insert(1, x.clone()).unwrap();
+    }
+    running.transaction_commit().unwrap();
+    assert_eq!(*triangle_set.lock().unwrap(), expected_triangle_set3);
+
+    /* 4. Insert and delete */
+    let insert_edges: Vec<(u64, u64)> = vec![(2, 6), (6, 3)];
+    let insert_edge_set = FnvHashSet::from_iter(
+        insert_edges
+            .iter()
+            .map(|(x, y)| Value::Tuple2(Box::new(Value::u64(*x)), Box::new(Value::u64(*y)))),
+    );
+    let delete_edges: Vec<(u64, u64)> = vec![(5, 2)];
+    let delete_edge_set = FnvHashSet::from_iter(
+        delete_edges
+            .iter()
+            .map(|(x, y)| Value::Tuple2(Box::new(Value::u64(*x)), Box::new(Value::u64(*y)))),
+    );
+
+    let expected_triangles4: Vec<(u64, u64, u64)> = vec![(3, 4, 1), (2, 6, 3)];
+    let expected_triangle_set4 =
+        BTreeMap::from_iter(expected_triangles4.iter().map(|(x, y, z)| {
+            (
+                Value::Tuple3(
+                    Box::new(Value::u64(*x)),
+                    Box::new(Value::u64(*y)),
+                    Box::new(Value::u64(*z)),
+                ),
+                1,
+            )
+        }));
+
+    running.transaction_start().unwrap();
+    for x in &insert_edge_set {
+        running.insert(1, x.clone()).unwrap();
+    }
+    for x in &delete_edge_set {
+        running.delete_value(1, x.clone()).unwrap();
+    }
+
+    running.transaction_commit().unwrap();
+    assert_eq!(*triangle_set.lock().unwrap(), expected_triangle_set4);
+
+    running.stop().unwrap();
+}
+
+#[test]
+fn test_triangles_1() {
+    test_triangles(1)
+}
+
+#[test]
+fn test_triangles_multi() {
+    test_triangles(16)
 }
 
 /* Maps and filters
