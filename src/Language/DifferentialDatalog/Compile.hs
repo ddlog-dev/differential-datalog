@@ -1219,8 +1219,8 @@ compileRule d rl@Rule{..} last_rhs_idx input_val = {-trace ("compileRule " ++ sh
                then openAtom  d vALUE_VAR rl 0 (rhsAtom $ head ruleRHS) "return None"
                else openTuple d vALUE_VAR $ rhsVarsAfter d rl last_rhs_idx
     -- Apply filters and assignments between last_rhs_idx and rhs_idx
-    let filters = mkFilters d rl last_rhs_idx
-    let prefix = open $+$ vcat filters
+    let filters debug = mkFilters d debug rl last_rhs_idx
+    let prefix debug = open $+$ vcat (filters debug)
     -- Generate XFormCollection or XFormArrangement for the 'rhs' operator.
     let mkArrangedOperator conditions inpval =
             case rhs of
@@ -1258,14 +1258,16 @@ compileRule d rl@Rule{..} last_rhs_idx input_val = {-trace ("compileRule " ++ sh
                             let key_str = parens $ commaSep $ map (pp . fst) key_vars
                             akey <- mkTupleValue d key_vars
                             aval <- mkVarsTupleValue d val_vars
-                            let afun = braces'
-                                       $ prefix $$
-                                         "Some((" <> akey <> "," <+> aval <> "))"
+                            let afun debug =
+                                    "&{fn __f(" <> vALUE_VAR <> ": Value) -> Option<(Value,Value)>" $$
+                                    (braces' $ prefix debug $$
+                                               "Some((" <> akey <> "," <+> aval <> "))")            $$
+                                    "__f}"
                             xform' <- mkArrangedOperator [] False
-                            return $ "XFormCollection::Arrange {"                                                                                    $$
-                                     "    description:" <+> (pp $ show $ show $ "arrange" <+> rulePPPrefix rl (last_rhs_idx+1) <+> "by" <+> key_str) <+> ".to_string(),"                                                                                                                             $$
-                                     (nest' $ "afun: &{fn __f(" <> vALUE_VAR <> ": Value) -> Option<(Value,Value)>" $$ afun $$ "__f},")              $$
-                                     "    next: Box::new(" <> xform' <> ")"                                                                          $$
+                            return $ "XFormCollection::Arrange {"                                                                    $$
+                                     "    description:" <+> (pp $ show $ show $ "arrange" <+> rulePPPrefix rl (last_rhs_idx+1) <+> "by" <+> key_str) <+> ".to_string()," $$
+                                     (nest' $ "afun: if __debug__ {" <+> afun True <+> "}" $$ "else {" <+> afun False <+> "},")      $$
+                                     "    next: Box::new(" <> xform' <> ")"                                                          $$
                                      "}"
                         Nothing -> mkCollectionOperator
             return $
@@ -1300,25 +1302,37 @@ rhsInputArrangement d rl rhs_idx (RHSAggregate _ vs _ _) =
                rhsVarsAfter d rl (rhs_idx - 1))
 rhsInputArrangement _ _  _       _ = Nothing
 
-mkFlatMap :: (?cfg::CompilerConfig) => DatalogProgram -> Doc -> Rule -> Int -> String -> Expr -> CompilerMonad Doc
+-- Generate debugging hook for the given context.
+-- The first argument is 'True' iff assembling the dataflow with debugging
+-- enabled.
+mkDebug :: Bool -> ECtx -> Doc
+mkDebug False _ = empty
+mkDebug True  _ = "eprintln!(\"debug\");"
+
+mkFlatMap :: (?cfg::CompilerConfig) => DatalogProgram -> (Bool -> Doc) -> Rule -> Int -> String -> Expr -> CompilerMonad Doc
 mkFlatMap d prefix rl idx v e = do
+    let ctx = CtxRuleRFlatMap rl idx
     vars <- mkVarsTupleValue d $ rhsVarsAfter d rl idx
     -- Flatten
-    let flatten = "let __flattened =" <+> mkExpr d (CtxRuleRFlatMap rl idx) e EVal <> ";"
+    let flatten = "let __flattened =" <+> mkExpr d ctx e EVal <> ";"
     -- Clone variables before passing them to the closure.
     let clones = vcat $ map ((\vname -> "let" <+> vname <+> "=" <+> vname <> ".clone();") . pp . name)
                       $ filter ((/= v) . name) $ rhsVarsAfter d rl idx
-    let fmfun = braces'
-                $ prefix  $$
-                  flatten $$
-                  clones  $$
-                  "Some(Box::new(__flattened.into_iter().map(move |" <> pp v <> "|" <> vars <> ")))"
+    let fmfun debug =
+            "&{fn __f(" <> vALUE_VAR <> ": Value) -> Option<Box<dyn Iterator<Item=Value>>>"                 $$
+                (braces' $
+                     prefix debug       $$
+                     mkDebug debug ctx  $$
+                     flatten            $$
+                     clones             $$
+                     "Some(Box::new(__flattened.into_iter().map(move |" <> pp v <> "|" <> vars <> ")))")    $$
+             "__f}"
     next <- compileRule d rl idx False
     return $
-        "XFormCollection::FlatMap{"                                                                                         $$
-        "    description:" <+> (pp $ show $ show $ rulePPPrefix rl $ idx + 1) <+> ".to_string(),"                           $$
-        (nest' $ "fmfun: &{fn __f(" <> vALUE_VAR <> ": Value) -> Option<Box<dyn Iterator<Item=Value>>>" $$ fmfun $$ "__f},")$$
-        "    next: Box::new(" <> next <> ")"                                                                                $$
+        "XFormCollection::FlatMap{"                                                                     $$
+        "    description:" <+> (pp $ show $ show $ rulePPPrefix rl $ idx + 1) <+> ".to_string(),"       $$
+        (nest' $ "fmfun: if __debug__ { " <+> fmfun True <> "}" $$ "else {" <+> fmfun False <+> "},")   $$
+        "    next: Box::new(" <> next <> ")"                                                            $$
         "}"
 
 mkAggregate :: (?cfg::CompilerConfig) => DatalogProgram -> [Int] -> Bool -> Rule -> Int -> CompilerMonad Doc
@@ -1345,16 +1359,19 @@ mkAggregate d filters input_val rl@Rule{..} idx = do
     result <- mkVarsTupleValue d $ rhsVarsAfter d rl idx
     let key_vars = map (getVar d ctx) rhsGroupBy
     open_key <- openTuple d ("*" <> kEY_VAR) key_vars
-    let agfun = braces'
-                $ open_key  $$
-                  aggregate $$
-                  result
+    let agfun debug =
+            "&{fn __f(" <> kEY_VAR <> ": &Value," <+> gROUP_VAR <> ": &[(&Value, Weight)]) -> Value"    $$
+            (braces' $ open_key          $$
+                       mkDebug debug ctx $$
+                       aggregate         $$
+                       result)                                                                          $$
+            "__f}"
     next <- compileRule d rl idx False
     return $
         "XFormArrangement::Aggregate{"                                                                                           $$
         "    description:" <+> (pp $ show $ show $ rulePPPrefix rl $ idx + 1) <> ".to_string(),"                                 $$
-        "    ffun:" <+> ffun <> ","                                                                                              $$
-        "    aggfun: &{fn __f(" <> kEY_VAR <> ": &Value," <+> gROUP_VAR <> ": &[(&Value, Weight)]) -> Value" $$ agfun $$ "__f}," $$
+        "    ffun: if __debug__ {" <+> ffun True <+> "}" $$ "else {" <+> ffun False <+> "},"                                     $$
+        "    aggfun: if __debug__ {" <+> agfun True <+> "}" $$ "else {" <+> agfun False <+> "},"                                 $$
         "    next: Box::new(" <> next <> ")"                                                                                     $$
         "}"
 
@@ -1452,9 +1469,9 @@ mkVarsTupleValue d vs = do
     return $ constructor <> (parens $ box d t $ tupleStruct $ map ((<> ".clone()") . pp . name) vs)
 
 -- Compile all contiguous RHSCondition terms following 'last_idx'
-mkFilters :: DatalogProgram -> Rule -> Int -> [Doc]
-mkFilters d rl@Rule{..} last_idx =
-    mapIdx (\rhs i -> mkFilter d (CtxRuleRCond rl $ i + last_idx + 1) $ rhsExpr rhs)
+mkFilters :: DatalogProgram -> Bool -> Rule -> Int -> [Doc]
+mkFilters d debug rl@Rule{..} last_idx =
+    mapIdx (\rhs i -> mkFilter d debug (CtxRuleRCond rl $ i + last_idx + 1) $ rhsExpr rhs)
     $ takeWhile (\case
                   RHSCondition{} -> True
                   _              -> False)
@@ -1462,12 +1479,13 @@ mkFilters d rl@Rule{..} last_idx =
 
 -- Implement RHSCondition semantics in Rust; brings new variables into
 -- scope if this is an assignment
-mkFilter :: DatalogProgram -> ECtx -> Expr -> Doc
-mkFilter d ctx (E e@ESet{..}) = mkAssignFilter d ctx e
-mkFilter d ctx e              = mkCondFilter d ctx e
+mkFilter :: DatalogProgram -> Bool -> ECtx -> Expr -> Doc
+mkFilter d debug ctx (E e@ESet{..}) = mkAssignFilter d debug ctx e
+mkFilter d debug ctx e              = mkCondFilter d debug ctx e
 
-mkAssignFilter :: DatalogProgram -> ECtx -> ENode -> Doc
-mkAssignFilter d ctx e@(ESet _ l r) =
+mkAssignFilter :: DatalogProgram -> Bool -> ECtx -> ENode -> Doc
+mkAssignFilter d debug ctx e@(ESet _ l r) =
+    mkDebug debug ctx                                               $$
     "let" <+> vardecls <+> "= match" <+> r' <+> "{"                 $$
     (nest' mtch)                                                    $$
     "};"
@@ -1477,24 +1495,29 @@ mkAssignFilter d ctx e@(ESet _ l r) =
     varnames = map (pp . fst) $ exprVarDecls (CtxSetL e ctx) l
     vars = tuple varnames
     vardecls = tuple $ map ("ref" <+>) varnames
-mkAssignFilter _ _ e = error $ "Compile.mkAssignFilter: unexpected expression " ++ show e
+mkAssignFilter _ _ _ e = error $ "Compile.mkAssignFilter: unexpected expression " ++ show e
 
-mkCondFilter :: DatalogProgram -> ECtx -> Expr -> Doc
-mkCondFilter d ctx e =
+mkCondFilter :: DatalogProgram -> Bool -> ECtx -> Expr -> Doc
+mkCondFilter d debug ctx e =
+    mkDebug debug ctx                                               $$
     "if !" <> mkExpr d ctx e EVal <+> "{return None;};"
 
 -- Generate the ffun field of `XFormArrangement::Join/Semijoin/Aggregate`.
 -- This field is used if input to the operator is an arranged relation.
-mkFFun :: (?cfg::CompilerConfig) => DatalogProgram -> Rule -> [Int] -> CompilerMonad Doc
-mkFFun _ Rule{} [] = return "None"
+mkFFun :: (?cfg::CompilerConfig) => DatalogProgram -> Rule -> [Int] -> CompilerMonad (Bool -> Doc)
+mkFFun _ Rule{} [] = return $ \_ -> "None"
 mkFFun d rl@Rule{..} input_filters = do
    open <- openAtom d ("*" <> vALUE_VAR) rl 0 (rhsAtom $ ruleRHS !! 0) ("return false")
-   let checks = hsep $ punctuate " &&"
-                $ map (\i -> mkExpr d (CtxRuleRCond rl i) (rhsExpr $ ruleRHS !! i) EVal) input_filters
-   return $ "Some(&{fn __f(" <> vALUE_VAR <> ": &Value) -> bool"   $$
-            (braces' $ open $$ checks)                             $$
-            "    __f"                                              $$
-            "})"
+   let checks debug = vcat $ punctuate " &&"
+                $ map (\i -> let ctx = CtxRuleRCond rl i in
+                             braces' $
+                                mkDebug debug ctx $$
+                                mkExpr d ctx (rhsExpr $ ruleRHS !! i) EVal) input_filters
+   return $ \debug ->
+             "Some(&{fn __f(" <> vALUE_VAR <> ": &Value) -> bool"   $$
+             (braces' $ open $$ checks debug)                       $$
+             "    __f"                                              $$
+             "})"
 
 -- Compile XForm::Join or XForm::Semijoin
 -- Returns generated xform and index of the last RHS term consumed by
@@ -1537,8 +1560,8 @@ mkJoin d input_filters input_val atom rl@Rule{..} join_idx = do
                then open_input ("*" <> vALUE_VAR1)
                else liftM2 ($$) (open_input ("*" <> vALUE_VAR1))
                            (openAtom d ("*" <> vALUE_VAR2) rl join_idx (atom{atomVal = simplify $ atomVal atom}) "return None")
-    let filters = mkFilters d rl join_idx
-        last_idx = join_idx + length filters
+    let filters debug = mkFilters d debug rl join_idx
+        last_idx = join_idx + length (filters True)
     -- If we're at the end of the rule, generate head atom; otherwise
     -- return all live variables in a tuple
     (ret, next) <- if last_idx == length ruleRHS - 1
@@ -1546,27 +1569,28 @@ mkJoin d input_filters input_val atom rl@Rule{..} join_idx = do
         else do ret <- mkVarsTupleValue d $ rhsVarsAfter d rl last_idx
                 next <- compileRule d rl last_idx False
                 return (ret, next)
-    let jfun = braces' $ open                     $$
-                         vcat filters             $$
-                         "Some" <> parens ret
+    let jfun debug =
+            "&{fn __f(_: &Value," <+> vALUE_VAR1 <> ": &Value," <+>
+                      (if is_semi then "_: &()" else vALUE_VAR2 <> ": &Value") <>") -> Option<Value>"     $$
+                (braces' $ open                     $$
+                           mkDebug debug ctx        $$
+                           vcat (filters debug)     $$
+                           "Some" <> parens ret)                                                                $$
+            "    __f}"
     return $
         if is_semi
            then "XFormArrangement::Semijoin{"                                                                                   $$
                 "    description:" <+> (pp $ show $ show $ rulePPPrefix rl $ join_idx + 1) <> ".to_string(),"                   $$
-                "    ffun:" <+> ffun <> ","                                                                                     $$
+                "    ffun: if __debug__ {" <+> ffun True <+> "}" $$ "else {" <+> ffun False <+> "},"                            $$
                 "    arrangement: (" <> relId (atomRelation atom) <> "," <> pp aid <> "),"                                      $$
-                "    jfun: &{fn __f(_: &Value ," <> vALUE_VAR1 <> ": &Value,_" <> vALUE_VAR2 <> ": &()) -> Option<Value>"       $$
-                nest' jfun                                                                                                      $$
-                "    __f},"                                                                                                     $$
+                (nest' $ "jfun: if __debug__ {" <+> jfun True <+> "}" $$ "else {" <+> jfun False <+> "},")                      $$
                 "    next: Box::new(" <> next  <> ")"                                                                           $$
                 "}"
            else "XFormArrangement::Join{"                                                                                       $$
                 "    description:" <+> (pp $ show $ show $ rulePPPrefix rl $ join_idx + 1) <> ".to_string(),"                   $$
-                "    ffun:" <+> ffun <> ","                                                                                     $$
+                (nest' $ "ffun: if __debug__ {" <+> ffun True <+> "}" $$ "else {" <+> ffun False <+> "},")                      $$
                 "    arrangement: (" <> relId (atomRelation atom) <> "," <> pp aid <> "),"                                      $$
-                "    jfun: &{fn __f(_: &Value ," <> vALUE_VAR1 <> ": &Value," <> vALUE_VAR2 <> ": &Value) -> Option<Value>"     $$
-                nest' jfun                                                                                                      $$
-                "    __f},"                                                                                                     $$
+                (nest' $ "jfun: if __debug__ {" <+> jfun True <+> "}" $$ "else {" <+> jfun False <+> "},")                      $$
                 "    next: Box::new(" <> next <> ")"                                                                            $$
                 "}"
 
@@ -1580,11 +1604,12 @@ mkAntijoin d input_filters input_val Atom{..} rl@Rule{..} ajoin_idx = do
     ffun <- mkFFun d rl input_filters
     aid <- fromJust <$> getAntijoinArrangement atomRelation arr
     next <- compileRule d rl ajoin_idx input_val
-    return $ "XFormArrangement::Antijoin {"                                                                   $$
-             "    description:" <+> (pp $ show $ show $ rulePPPrefix rl $ ajoin_idx + 1) <> ".to_string(),"   $$
-             "    ffun:" <+> ffun <> ","                                                                      $$
-             "    arrangement: (" <> relId atomRelation <> "," <> pp aid <> "),"                              $$
-             "    next: Box::new(" <> next <> ")"                                                             $$
+    return $ "XFormArrangement::Antijoin {"                                                                             $$
+             "    description:" <+> (pp $ show $ show $ rulePPPrefix rl $ ajoin_idx + 1) <> ".to_string(),"             $$
+             "    ffun: if __debug__ {" <+> ffun True <+> "}" $$ "else {" <+> ffun False <+> "},"                       $$
+             "    arrangement: (" <> relId atomRelation <> "," <> pp aid <> "),"                                        $$
+             "    post_ffun: if __debug__ {" <+> mkDebug True ctx <+> "None}" $$ "else {" <+> mkDebug False ctx <+> "None},"    $$
+             "    next: Box::new(" <> next <> ")"                                                                       $$
              "}"
 
 -- Normalized representation of an arrangement.  In general, an arrangement is characterized
@@ -1741,15 +1766,18 @@ arrangeInput d fstatom arrange_input_by = do
     normalize' _  e                                                = E e
 
 -- Compile XForm::FilterMap that generates the head of the rule
-mkHead :: (?cfg::CompilerConfig) => DatalogProgram -> Doc -> Rule -> CompilerMonad Doc
+mkHead :: (?cfg::CompilerConfig) => DatalogProgram -> (Bool -> Doc) -> Rule -> CompilerMonad Doc
 mkHead d prefix rl = do
     v <- mkValue' d (CtxRuleL rl 0) (atomVal $ head $ ruleLHS rl)
-    let fmfun = braces' $ prefix $$
-                          "Some" <> parens v
+    let fmfun debug =
+            "&{fn __f(" <> vALUE_VAR <> ": Value) -> Option<Value>" $$
+            (braces' $ prefix debug $$
+                      "Some" <> parens v)                           $$
+            "__f}"
     return $
         "XFormCollection::FilterMap{"                                                               $$
         "    description:" <+> (pp $ show $ show $ "head of" <+> pp rl) <+> ".to_string(),"         $$
-        nest' ("fmfun: &{fn __f(" <> vALUE_VAR <> ": Value) -> Option<Value>" $$ fmfun $$ "__f},")  $$
+        nest' ("fmfun: if __debug__ {" <+> fmfun True <+> "}" $$ "else {" <+> fmfun False <+> "},") $$
         "    next: Box::new(None)"                                                                  $$
         "}"
 

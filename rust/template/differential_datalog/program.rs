@@ -440,6 +440,8 @@ pub enum XFormArrangement<V: Val> {
         ffun: Option<&'static FilterFunc<V>>,
         /// Arrangement to antijoin with
         arrangement: ArrId,
+        /// Optionally filter records produced by the antijoin operator.
+        post_ffun: Option<&'static FilterFunc<V>>,
         /// Antijoin returns a collection: apply `next` transformation to it.
         next: Box<Option<XFormCollection<V>>>,
     },
@@ -1702,29 +1704,34 @@ impl<V: Val> Program<V> {
                 description,
                 ffun,
                 arrangement,
+                post_ffun,
                 next,
             } => match arrangements.lookup_arr(*arrangement) {
                 A::Arrangement1(ArrangedCollection::Set(arranged)) => {
                     let col = with_prof_context(&description, || {
-                        ffun.map_or_else(
-                            || antijoin_arranged(&arr, arranged).map(|(_, v)| v),
-                            |f| {
-                                antijoin_arranged(&arr.filter(move |_, v| f(v)), arranged)
-                                    .map(|(_, v)| v)
-                            },
-                        )
+                        let col = ffun.map_or_else(
+                            || antijoin_arranged(&arr, arranged),
+                            |f| antijoin_arranged(&arr.filter(move |_, v| f(v)), arranged),
+                        );
+                        match post_ffun {
+                            None => col.map(|(_, v)| v),
+                            Some(&f) => col
+                                .flat_map(move |(_, v)| if f(&v) { Some(v.clone()) } else { None }),
+                        }
                     });
                     Self::xform_collection(col, &*next, arrangements)
                 }
                 A::Arrangement2(ArrangedCollection::Set(arranged)) => {
                     let col = with_prof_context(&description, || {
-                        ffun.map_or_else(
-                            || antijoin_arranged(&arr, arranged).map(|(_, v)| v),
-                            |f| {
-                                antijoin_arranged(&arr.filter(move |_, v| f(v)), arranged)
-                                    .map(|(_, v)| v)
-                            },
-                        )
+                        let col = ffun.map_or_else(
+                            || antijoin_arranged(&arr, arranged),
+                            |f| antijoin_arranged(&arr.filter(move |_, v| f(v)), arranged),
+                        );
+                        match post_ffun {
+                            None => col.map(|(_, v)| v),
+                            Some(&f) => col
+                                .flat_map(move |(_, v)| if f(&v) { Some(v.clone()) } else { None }),
+                        }
                     });
                     Self::xform_collection(col, &*next, arrangements)
                 }
