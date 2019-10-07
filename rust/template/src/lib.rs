@@ -73,6 +73,7 @@ pub mod ovsdb;
 pub mod server;
 pub mod update_handler;
 pub mod valmap;
+pub mod debug;
 
 const __debug__: bool = false;
 

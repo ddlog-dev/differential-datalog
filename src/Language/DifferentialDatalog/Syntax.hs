@@ -119,6 +119,8 @@ module Language.DifferentialDatalog.Syntax (
         DatalogProgram(..),
         emptyDatalogProgram,
         progStructs,
+        progInputRelations,
+        progOutputRelations,
         progConstructors,
         progAddRel,
         progAddRules,
@@ -937,6 +939,12 @@ instance PP DatalogProgram where
 
 instance Show DatalogProgram where
     show = render . pp
+
+progInputRelations :: DatalogProgram -> [Relation]
+progInputRelations = filter ((== RelInput) . relRole) . M.elems . progRelations
+
+progOutputRelations :: DatalogProgram -> [Relation]
+progOutputRelations = filter ((== RelOutput) . relRole) . M.elems . progRelations
 
 progStructs :: DatalogProgram -> M.Map String TypeDef
 progStructs DatalogProgram{..} =

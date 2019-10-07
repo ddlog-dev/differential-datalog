@@ -1,3 +1,5 @@
+//! Data types used in debugging hooks.
+
 /// Identifies an operator inside a DDlog program.
 ///
 /// * `relid` - Relation whose rule is being fired.
@@ -27,7 +29,7 @@ enum DebugEvent {
         /// Relation being modified.
         relid: RelId,
         /// Value being added to or removed from the relation.
-        val: Record
+        val: Record,
         /// The number of derivations of `val` being added (`diff>0`) or
         /// removed (`diff<0`).
         diff: isize
