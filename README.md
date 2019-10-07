@@ -4,6 +4,7 @@
 
 # Differential Datalog (DDlog)
 
+
 DDlog is a *bottom-up*, *incremental*, *in-memory*, *typed* Datalog engine. It is well suited for
 writing programs that incrementally update their output in response to input changes. With DDlog,
 the programmer does not need to worry about writing incremental algorithms.
