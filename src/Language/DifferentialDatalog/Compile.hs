@@ -1315,14 +1315,11 @@ mkDebug True ctx =
     "eprintln!(\"Debugger event: {:?}\"," <+> event <> ");"
     where
     relid = pp $ relIdentifier ?d $ getRelation ?d $ atomRelation $ head $ ruleLHS ?rule
-    vars idx = (\fs -> "vec![" <> fs <> "]")
-                 $ commaSep
-                 $ map ((<> ".clone().into_record()") . pp . name)
-             $ rhsVarsAfter (idx-1)
-    post_join_vars idx = (\fs -> "vec![" <> fs <> "]")
-                         $ commaSep
-                         $ map ((<> ".clone().into_record()") . pp . name)
-                         $ (rhsVarsAfter (idx - 1)) `intersect` (rhsVarsAfter idx)
+    vars fields = (\fs -> "vec![" <> fs <> "]")
+                  $ commaSep
+                  $ map ((<> ".clone().into_record()") . pp . name)
+                  fields
+    post_join_vars idx = vars $ (rhsVarsAfter (idx - 1)) `intersect` (rhsVarsAfter idx)
     event = case ctx of
         CtxRuleRFlatMap{..} ->
             "debug::DebugEvent::Activation{"                $$
@@ -1330,7 +1327,7 @@ mkDebug True ctx =
                          "relid:" <+> relid <>
                          ", ruleidx:" <+> pp ?rule_idx <>
                          ", opidx:" <+> pp ctxIdx <> "},"   $$
-            "    operands: debug::Operands::FlatMap{vars:" <+> vars ctxIdx <> "}" $$
+            "    operands: debug::Operands::FlatMap{vars:" <+> (vars $ rhsVarsAfter (ctxIdx-1)) <> "}" $$
             "}"
         CtxRuleRCond{..} ->
             "debug::DebugEvent::Activation{"                $$
@@ -1338,7 +1335,7 @@ mkDebug True ctx =
                          "relid:" <+> relid <>
                          ", ruleidx:" <+> pp ?rule_idx <>
                          ", opidx:" <+> pp ctxIdx <> "},"   $$
-            "    operands: debug::Operands::Filter{vars:" <+> vars ctxIdx <> "}" $$
+            "    operands: debug::Operands::Filter{vars:" <+> (vars $ rhsVarsAfter (ctxIdx-1)) <> "}" $$
             "}"
         CtxRuleRAtom{..} | rhsPolarity (ruleRHS ctxRule !! ctxAtomIdx) &&
                            rhsIsSemijoin ctxAtomIdx ->
@@ -1366,15 +1363,17 @@ mkDebug True ctx =
                          ", opidx:" <+> pp ctxAtomIdx <> "},"   $$
             "    operands: debug::Operands::Antijoin{post_vars: " <+> post_join_vars ctxAtomIdx <> "}" $$
             "}"
+        CtxRuleRAggregate{..} ->
+            let RHSAggregate{..} = ruleRHS ctxRule !! ctxIdx in
+            "debug::DebugEvent::Activation{"                $$
+            "    opid: debug::OpId{" <>
+                         "relid:" <+> relid <>
+                         ", ruleidx:" <+> pp ?rule_idx <>
+                         ", opidx:" <+> pp ctxIdx <> "},"   $$
+            "    operands: debug::Operands::Aggregate{key:" <+> vars (map (getVar ?d ctx) rhsGroupBy) <> 
+                    ", group:" <+> gROUP_VAR <> ".iter().map(|(val,_)|(*val).clone().into_record()).collect()}" $$
+            "}"
         _ -> "\"{}\""
-
-{-
-mkDebug True CtxRuleRAggregate{..}  =
-    rhsGroupBy
-    gROUP_VAR <> ": &[(&Value, Weight)])"
-mkDebug True CtxRuleRAtom{..}  =
-    fields <- ruleRHSVarSet ?d ctxRule ctxIsSetL
--}
 
 mkFlatMap :: (?cfg::CompilerConfig, ?d::DatalogProgram, ?rule::Rule, ?rule_idx::Int)
     => (Bool -> Doc) -> Int -> String -> Expr -> CompilerMonad Doc
