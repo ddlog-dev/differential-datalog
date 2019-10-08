@@ -69,11 +69,11 @@ use std::ptr;
 use std::sync;
 
 pub mod api;
+pub mod debug;
 pub mod ovsdb;
 pub mod server;
 pub mod update_handler;
 pub mod valmap;
-pub mod debug;
 
 const __debug__: bool = false;
 

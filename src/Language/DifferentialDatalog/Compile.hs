@@ -856,8 +856,8 @@ mkRelIdMap =
     mkrel :: Relation -> Doc
     mkrel rel = "m.insert(Relations::" <> rname (name rel) <> ", \"" <> pp (name rel) <> "\");"
 
-mkRelIdMapC :: DatalogProgram -> Doc
-mkRelIdMapC d =
+mkRelIdMapC :: (?d::DatalogProgram) => Doc
+mkRelIdMapC =
     "lazy_static! {"                                                            $$
     "    pub static ref RELIDMAPC: FnvHashMap<RelId, ffi::CString> = {"         $$
     "        let mut m = FnvHashMap::default();"                                $$
@@ -866,9 +866,9 @@ mkRelIdMapC d =
     "   };"                                                                     $$
     "}"
     where
-    entries = map mkrel $ M.elems $ progRelations d
+    entries = map mkrel $ M.elems $ progRelations ?d
     mkrel :: Relation -> Doc
-    mkrel rel = "m.insert(" <> pp (relIdentifier d rel) <>
+    mkrel rel = "m.insert(" <> pp (relIdentifier ?d rel) <>
         ", ffi::CString::new(\"" <> pp (name rel) <> "\").unwrap_or_else(|_|ffi::CString::new(r\"Cannot convert relation name to C string\").unwrap()));"
 
 mkInputRelIdMap :: (?d::DatalogProgram) => Doc
@@ -1315,7 +1315,7 @@ mkDebug True ctx =
     "eprintln!(\"Debugger event: {:?}\"," <+> event <> ");"
     where
     relid = pp $ relIdentifier ?d $ getRelation ?d $ atomRelation $ head $ ruleLHS ?rule
-    fields idx = (\fs -> "vec![" <> fs <> "]")
+    vars idx = (\fs -> "vec![" <> fs <> "]")
                  $ commaSep
                  $ map ((<> ".clone().into_record()") . pp . name)
              $ rhsVarsAfter (idx-1)
@@ -1326,7 +1326,7 @@ mkDebug True ctx =
                          "relid:" <+> relid <>
                          ", ruleidx:" <+> pp ?rule_idx <>
                          ", opidx:" <+> pp ctxIdx <> "},"   $$
-            "    input:" <+> fields ctxIdx $$
+            "    operands: debug::Operands::FlatMap{vars:" <+> vars ctxIdx <> "}" $$
             "}"
         CtxRuleRCond{..} ->
             "debug::DebugEvent::Activation{"                $$
@@ -1334,17 +1334,34 @@ mkDebug True ctx =
                          "relid:" <+> relid <>
                          ", ruleidx:" <+> pp ?rule_idx <>
                          ", opidx:" <+> pp ctxIdx <> "},"   $$
-            "    input:" <+> fields ctxIdx $$
+            "    operands: debug::Operands::Filter{vars:" <+> vars ctxIdx <> "}" $$
+            "}"
+        CtxRuleRAtom{..} | rhsPolarity (ruleRHS ctxRule !! ctxAtomIdx) &&
+                           rhsIsSemijoin ctxAtomIdx ->
+            "debug::DebugEvent::Activation{"                $$
+            "    opid: debug::OpId{" <>
+                         "relid:" <+> relid <>
+                         ", ruleidx:" <+> pp ?rule_idx <>
+                         ", opidx:" <+> pp ctxAtomIdx <> "},"   $$
+            "    operands: debug::Operands::Semijoin{prefix_vars: " <+> vars ctxAtomIdx <> "}" $$
+            "}"
+        CtxRuleRAtom{..} | rhsPolarity (ruleRHS ctxRule !! ctxAtomIdx) ->
+            "debug::DebugEvent::Activation{"                $$
+            "    opid: debug::OpId{" <>
+                         "relid:" <+> relid <>
+                         ", ruleidx:" <+> pp ?rule_idx <>
+                         ", opidx:" <+> pp ctxAtomIdx <> "},"   $$
+            "    operands: debug::Operands::Join{prefix_vars: " <+> vars ctxAtomIdx <>
+                                                ", val:" <+> vALUE_VAR2 <> ".clone().into_record()}" $$
             "}"
         CtxRuleRAtom{..} ->
             "debug::DebugEvent::Activation{"                $$
             "    opid: debug::OpId{" <>
                          "relid:" <+> relid <>
                          ", ruleidx:" <+> pp ?rule_idx <>
-                         ", opidx:" <+> pp ctxIdx <> "},"   $$
-            "    input:" <+> fields ctxIdx $$
+                         ", opidx:" <+> pp ctxAtomIdx <> "},"   $$
+            "    operands: debug::Operands::Antijoin{post_vars: " <+> vars (ctxAtomIdx + 1) <> "}" $$
             "}"
-
         _ -> "\"{}\""
 
 {-
@@ -1353,7 +1370,6 @@ mkDebug True CtxRuleRAggregate{..}  =
     gROUP_VAR <> ": &[(&Value, Weight)])"
 mkDebug True CtxRuleRAtom{..}  =
     fields <- ruleRHSVarSet ?d ctxRule ctxIsSetL
-
 -}
 
 mkFlatMap :: (?cfg::CompilerConfig, ?d::DatalogProgram, ?rule::Rule, ?rule_idx::Int)
@@ -1583,7 +1599,7 @@ mkJoin input_filters input_val atom join_idx = do
     let ctx = CtxRuleRAtom ?rule join_idx
     let (arr, _) = normalizeArrangement ctx $ atomVal atom
     -- If the operator does not introduce new variables then it's a semijoin
-    let semijoin = null $ ruleRHSNewVars ?d ?rule join_idx
+    let semijoin = rhsIsSemijoin join_idx
     semi_arr_idx <- getSemijoinArrangement (atomRelation atom) arr
     join_arr_idx <- getJoinArrangement (atomRelation atom) arr
     -- Treat semijoin as normal join if we only have a map arrangement for it
@@ -1659,14 +1675,22 @@ mkAntijoin input_filters input_val Atom{..} ajoin_idx = do
     let (arr, _) = normalizeArrangement ctx atomVal
     -- Filter inputs using 'input_filters'
     ffun <- mkFFun input_filters
+    post_open <- openTuple vALUE_VAR (rhsVarsAfter ajoin_idx)
+    let post_ffun False = "None"
+        post_ffun True =
+            "Some(&{fn __f(" <> vALUE_VAR <> ": &Value) -> bool"        $$
+                (braces' $ post_open                                    $$
+                           mkDebug True ctx                             $$
+                           "true")                                      $$
+            "    __f})"
     aid <- fromJust <$> getAntijoinArrangement atomRelation arr
     next <- compileRule ajoin_idx input_val
-    return $ "XFormArrangement::Antijoin {"                                                                                     $$
-             "    description:" <+> (pp $ show $ show $ rulePPPrefix ?rule $ ajoin_idx + 1) <> ".to_string(),"                  $$
-             "    ffun: if __debug__ {" <+> ffun True <+> "}" $$ "else {" <+> ffun False <+> "},"                               $$
-             "    arrangement: (" <> relId atomRelation <> "," <> pp aid <> "),"                                                $$
-             "    post_ffun: if __debug__ {" <+> mkDebug True ctx <+> "None}" $$ "else {" <+> mkDebug False ctx <+> "None},"    $$
-             "    next: Box::new(" <> next <> ")"                                                                               $$
+    return $ "XFormArrangement::Antijoin {"                                                                         $$
+             "    description:" <+> (pp $ show $ show $ rulePPPrefix ?rule $ ajoin_idx + 1) <> ".to_string(),"      $$
+             "    ffun: if __debug__ {" <+> ffun True <+> "}" $$ "else {" <+> ffun False <+> "},"                   $$
+             "    arrangement: (" <> relId atomRelation <> "," <> pp aid <> "),"                                    $$
+             "    post_ffun: if __debug__ {" <+> post_ffun True <+> "}" $$ "else {" <+> post_ffun False <+> "},"    $$
+             "    next: Box::new(" <> next <> ")"                                                                   $$
              "}"
 
 -- Normalized representation of an arrangement.  In general, an arrangement is characterized
@@ -1849,6 +1873,11 @@ rhsVarsAfter i =
                      else elem (name f) $ (map name $ ruleLHSVars ?d ?rule) `union`
                                           (concatMap (ruleRHSTermVars ?rule) [i+1..length (ruleRHS ?rule) - 1]))
            $ ruleRHSVars ?d ?rule (i+1)
+
+-- True if join operator is a semijoin.
+rhsIsSemijoin :: (?d::DatalogProgram, ?rule::Rule) => Int -> Bool
+rhsIsSemijoin join_idx =
+    null $ ruleRHSNewVars ?d ?rule join_idx
 
 mkProg :: [ProgNode] -> CompilerMonad Doc
 mkProg nodes = do
