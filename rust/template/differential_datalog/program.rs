@@ -1719,8 +1719,11 @@ impl<V: Val> Program<V> {
                         );
                         match post_ffun {
                             None => col.map(|(_, v)| v),
-                            Some(&f) => col
-                                .flat_map(move |(k, v)| if f(&k, &v) { Some(v.clone()) } else { None }),
+                            Some(&f) => {
+                                col.flat_map(
+                                    move |(k, v)| if f(&k, &v) { Some(v.clone()) } else { None },
+                                )
+                            }
                         }
                     });
                     Self::xform_collection(col, &*next, arrangements)
@@ -1733,8 +1736,11 @@ impl<V: Val> Program<V> {
                         );
                         match post_ffun {
                             None => col.map(|(_, v)| v),
-                            Some(&f) => col
-                                .flat_map(move |(k, v)| if f(&k, &v) { Some(v.clone()) } else { None }),
+                            Some(&f) => {
+                                col.flat_map(
+                                    move |(k, v)| if f(&k, &v) { Some(v.clone()) } else { None },
+                                )
+                            }
                         }
                     });
                     Self::xform_collection(col, &*next, arrangements)

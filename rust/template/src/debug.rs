@@ -57,14 +57,10 @@ pub enum DebugEvent {
 pub enum Operands {
     /// FlatMap: variables declared in previous operators that
     /// are used in the FlatMap operator or in the rest of the rule.
-    FlatMap {
-        vars: Vec<Record>,
-    },
+    FlatMap { vars: Vec<Record> },
     /// Filter: variables declared in previous operators that
     /// are used in the Filter operator or in the rest of the rule.
-    Filter {
-        vars: Vec<Record>,
-    },
+    Filter { vars: Vec<Record> },
     /// Join:
     /// * `prefix_vars` - variables declared in previous operators
     /// that are used in operators **following** the join.
