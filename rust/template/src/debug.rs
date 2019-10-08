@@ -1,5 +1,8 @@
 //! Data types used in debugging hooks.
 
+use differential_datalog::program::RelId;
+use differential_datalog::record::Record;
+
 /// Identifies an operator inside a DDlog program.
 ///
 /// * `relid` - Relation whose rule is being fired.
@@ -8,10 +11,11 @@
 ///
 /// * `opidx` - Index of an operator in the body of the rule.
 ///
-struct OpId {
-    relid: RelId,
-    ruleidx: usize,
-    opidx: usize
+#[derive(Debug)]
+pub struct OpId {
+    pub relid: RelId,
+    pub ruleidx: usize,
+    pub opidx: usize
 }
 
 /// An event inside a DDlog program that must be reported to the debugger.
@@ -24,13 +28,14 @@ struct OpId {
 /// debugger, this event notifies the debugger that an operator in one of
 /// program's rules has been activated.
 ///
-enum DebugEvent {
+#[derive(Debug)]
+pub enum DebugEvent {
     RelationUpdate {
         /// Relation being modified.
         relid: RelId,
         /// Value being added to or removed from the relation.
         val: Record,
-        /// The number of derivations of `val` being added (`diff>0`) or
+        /// The number of derivations of `val` being added (`diff>0`) or removed (`diff<0`).
         /// removed (`diff<0`).
         diff: isize
     },
