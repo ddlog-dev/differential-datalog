@@ -1328,6 +1328,22 @@ mkDebug True ctx =
                          ", opidx:" <+> pp ctxIdx <> "},"   $$
             "    input:" <+> fields ctxIdx $$
             "}"
+        CtxRuleRCond{..} ->
+            "debug::DebugEvent::Activation{"                $$
+            "    opid: debug::OpId{" <>
+                         "relid:" <+> relid <>
+                         ", ruleidx:" <+> pp ?rule_idx <>
+                         ", opidx:" <+> pp ctxIdx <> "},"   $$
+            "    input:" <+> fields ctxIdx $$
+            "}"
+        CtxRuleRAtom{..} ->
+            "debug::DebugEvent::Activation{"                $$
+            "    opid: debug::OpId{" <>
+                         "relid:" <+> relid <>
+                         ", ruleidx:" <+> pp ?rule_idx <>
+                         ", opidx:" <+> pp ctxIdx <> "},"   $$
+            "    input:" <+> fields ctxIdx $$
+            "}"
 
         _ -> "\"{}\""
 
@@ -1335,20 +1351,9 @@ mkDebug True ctx =
 mkDebug True CtxRuleRAggregate{..}  =
     rhsGroupBy
     gROUP_VAR <> ": &[(&Value, Weight)])"
-mkDebug True CtxRuleRCond{..}  =
-    fields <- ruleRHSVarSet ?d ctxRule ctxIsSetL
 mkDebug True CtxRuleRAtom{..}  =
     fields <- ruleRHSVarSet ?d ctxRule ctxIsSetL
 
-struct OpId {
-    relid: relIdentifier ?d $ atomRelation $ head $ ruleLHS ctxRule ,
-    ruleidx: ?rule_idx,
-    opidx: usize
-}
-Activation {
-    opid:   OpId,
-    input:  Vec<Record>
-}
 -}
 
 mkFlatMap :: (?cfg::CompilerConfig, ?d::DatalogProgram, ?rule::Rule, ?rule_idx::Int)
