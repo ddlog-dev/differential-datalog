@@ -47,33 +47,53 @@ pub enum DebugEvent {
     },
 }
 
-/// Operands for each operator type.
+/// Context within which each operator is evaluated.  This only
+/// includes values that the compiler maintains for the given
+/// operator, as opposed to all values in the current syntactic scope.
+/// For example, variables that are declared in previous literals
+/// but are not used in the rest of the rule are not included
+/// in the context.
 #[derive(Debug)]
 pub enum Operands {
     /// FlatMap: variables declared in previous operators that
-    /// are used in the rest of the rule.
+    /// are used in the FlatMap operator or in the rest of the rule.
     FlatMap {
         vars: Vec<Record>,
     },
     /// Filter: variables declared in previous operators that
-    /// are used in the rest of the rule.
+    /// are used in the Filter operator or in the rest of the rule.
     Filter {
         vars: Vec<Record>,
     },
-    /// Join: variables declared in previous operators that
-    /// are used in the rest of the rule.
+    /// Join:
+    /// * `prefix_vars` - variables declared in previous operators
+    /// that are used in operators **following** the join.
+    /// * `val` - record being joined with.
     Join {
         prefix_vars: Vec<Record>,
         val: Record,
     },
+    /// Semijoin:
+    /// * `key` - arrangement key.
+    /// * `prefix_vars` - variables declared in previous operators
+    /// that are used in operators **following** the join.
     Semijoin {
+        key: Record,
         prefix_vars: Vec<Record>,
     },
+    /// Antijoin:
+    /// * `key` - arrangement key.
+    /// * `prefix_vars` - variables declared in previous operators
+    /// that are used in operators **following** the join.
     Antijoin {
-        post_vars: Vec<Record>,
+        key: Record,
+        prefix_vars: Vec<Record>,
     },
+    /// Aggregate:
+    /// * `group_by` - group-by variables.
+    /// * `group` - all values in a group.
     Aggregate {
-        key: Vec<Record>,
+        group_by: Vec<Record>,
         group: Vec<Record>,
     },
 }

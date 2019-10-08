@@ -350,6 +350,10 @@ pub type JoinFunc<V> = fn(&V, &V, &V) -> Option<V>;
 /// Takes join key and value (see `XFormArrangement::Semijoin`).
 pub type SemijoinFunc<V> = fn(&V, &V, &()) -> Option<V>;
 
+/// Function type used to filter key/value pairs produced by an antijoin (see
+/// `XFormArrangement::Antijoin`).
+pub type AntijoinFunc<V> = fn(&V, &V) -> bool;
+
 /// Aggregation function: aggregates multiple values into a single value.
 pub type AggFunc<V> = fn(&V, &[(&V, Weight)]) -> V;
 
@@ -441,7 +445,7 @@ pub enum XFormArrangement<V: Val> {
         /// Arrangement to antijoin with
         arrangement: ArrId,
         /// Optionally filter records produced by the antijoin operator.
-        post_ffun: Option<&'static FilterFunc<V>>,
+        post_ffun: Option<&'static AntijoinFunc<V>>,
         /// Antijoin returns a collection: apply `next` transformation to it.
         next: Box<Option<XFormCollection<V>>>,
     },
@@ -1716,7 +1720,7 @@ impl<V: Val> Program<V> {
                         match post_ffun {
                             None => col.map(|(_, v)| v),
                             Some(&f) => col
-                                .flat_map(move |(_, v)| if f(&v) { Some(v.clone()) } else { None }),
+                                .flat_map(move |(k, v)| if f(&k, &v) { Some(v.clone()) } else { None }),
                         }
                     });
                     Self::xform_collection(col, &*next, arrangements)
@@ -1730,7 +1734,7 @@ impl<V: Val> Program<V> {
                         match post_ffun {
                             None => col.map(|(_, v)| v),
                             Some(&f) => col
-                                .flat_map(move |(_, v)| if f(&v) { Some(v.clone()) } else { None }),
+                                .flat_map(move |(k, v)| if f(&k, &v) { Some(v.clone()) } else { None }),
                         }
                     });
                     Self::xform_collection(col, &*next, arrangements)

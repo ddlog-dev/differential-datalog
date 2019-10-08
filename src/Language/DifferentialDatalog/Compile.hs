@@ -1337,6 +1337,7 @@ mkDebug True ctx =
                          ", opidx:" <+> pp ctxIdx <> "},"   $$
             "    operands: debug::Operands::Filter{vars:" <+> (vars $ rhsVarsAfter (ctxIdx-1)) <> "}" $$
             "}"
+        -- Semijoin
         CtxRuleRAtom{..} | rhsPolarity (ruleRHS ctxRule !! ctxAtomIdx) &&
                            rhsIsSemijoin ctxAtomIdx ->
             "debug::DebugEvent::Activation{"                $$
@@ -1344,24 +1345,28 @@ mkDebug True ctx =
                          "relid:" <+> relid <>
                          ", ruleidx:" <+> pp ?rule_idx <>
                          ", opidx:" <+> pp ctxAtomIdx <> "},"   $$
-            "    operands: debug::Operands::Semijoin{prefix_vars: " <+> post_join_vars ctxAtomIdx <> "}" $$
+            "    operands: debug::Operands::Semijoin{key:" <+> kEY_VAR <> ".clone().into_record()" <>
+                    ", prefix_vars:" <+> post_join_vars ctxAtomIdx <> "}" $$
             "}"
+        -- Join
         CtxRuleRAtom{..} | rhsPolarity (ruleRHS ctxRule !! ctxAtomIdx) ->
             "debug::DebugEvent::Activation{"                $$
             "    opid: debug::OpId{" <>
                          "relid:" <+> relid <>
                          ", ruleidx:" <+> pp ?rule_idx <>
                          ", opidx:" <+> pp ctxAtomIdx <> "},"   $$
-            "    operands: debug::Operands::Join{prefix_vars: " <+> post_join_vars ctxAtomIdx <>
+            "    operands: debug::Operands::Join{prefix_vars:" <+> post_join_vars ctxAtomIdx <>
                                                 ", val:" <+> vALUE_VAR2 <> ".clone().into_record()}" $$
             "}"
+        -- Antijoin
         CtxRuleRAtom{..} ->
             "debug::DebugEvent::Activation{"                $$
             "    opid: debug::OpId{" <>
                          "relid:" <+> relid <>
                          ", ruleidx:" <+> pp ?rule_idx <>
                          ", opidx:" <+> pp ctxAtomIdx <> "},"   $$
-            "    operands: debug::Operands::Antijoin{post_vars: " <+> post_join_vars ctxAtomIdx <> "}" $$
+            "    operands: debug::Operands::Antijoin{key:" <+> kEY_VAR <> ".clone().into_record()" <>
+                    ", prefix_vars: " <+> post_join_vars ctxAtomIdx <> "}" $$
             "}"
         CtxRuleRAggregate{..} ->
             let RHSAggregate{..} = ruleRHS ctxRule !! ctxIdx in
@@ -1370,10 +1375,10 @@ mkDebug True ctx =
                          "relid:" <+> relid <>
                          ", ruleidx:" <+> pp ?rule_idx <>
                          ", opidx:" <+> pp ctxIdx <> "},"   $$
-            "    operands: debug::Operands::Aggregate{key:" <+> vars (map (getVar ?d ctx) rhsGroupBy) <> 
+            "    operands: debug::Operands::Aggregate{group_by:" <+> vars (map (getVar ?d ctx) rhsGroupBy) <> 
                     ", group:" <+> gROUP_VAR <> ".iter().map(|(val,_)|(*val).clone().into_record()).collect()}" $$
             "}"
-        _ -> "\"{}\""
+        _ -> error $ "Compile.mkDebug: unexpected context " ++ show ctx
 
 mkFlatMap :: (?cfg::CompilerConfig, ?d::DatalogProgram, ?rule::Rule, ?rule_idx::Int)
     => (Bool -> Doc) -> Int -> String -> Expr -> CompilerMonad Doc
@@ -1644,7 +1649,7 @@ mkJoin input_filters input_val atom join_idx = do
                 next <- compileRule last_idx False
                 return (ret, next)
     let jfun debug =
-            "&{fn __f(_: &Value," <+> vALUE_VAR1 <> ": &Value," <+>
+            "&{fn __f(" <> kEY_VAR <>": &Value," <+> vALUE_VAR1 <> ": &Value," <+>
                       (if is_semi then "_: &()" else vALUE_VAR2 <> ": &Value") <>") -> Option<Value>"     $$
                 (braces' $ open                     $$
                            mkDebug debug ctx        $$
@@ -1681,7 +1686,7 @@ mkAntijoin input_filters input_val Atom{..} ajoin_idx = do
     post_open <- openTuple vALUE_VAR (rhsVarsAfter ajoin_idx)
     let post_ffun False = "None"
         post_ffun True =
-            "Some(&{fn __f(" <> vALUE_VAR <> ": &Value) -> bool"        $$
+            "Some(&{fn __f(" <> kEY_VAR <> ": &Value, " <> vALUE_VAR <> ": &Value) -> bool"        $$
                 (braces' $ post_open                                    $$
                            mkDebug True ctx                             $$
                            "true")                                      $$
