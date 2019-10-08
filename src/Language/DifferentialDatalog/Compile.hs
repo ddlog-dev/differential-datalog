@@ -1319,6 +1319,10 @@ mkDebug True ctx =
                  $ commaSep
                  $ map ((<> ".clone().into_record()") . pp . name)
              $ rhsVarsAfter (idx-1)
+    post_join_vars idx = (\fs -> "vec![" <> fs <> "]")
+                         $ commaSep
+                         $ map ((<> ".clone().into_record()") . pp . name)
+                         $ (rhsVarsAfter (idx - 1)) `intersect` (rhsVarsAfter idx)
     event = case ctx of
         CtxRuleRFlatMap{..} ->
             "debug::DebugEvent::Activation{"                $$
@@ -1343,7 +1347,7 @@ mkDebug True ctx =
                          "relid:" <+> relid <>
                          ", ruleidx:" <+> pp ?rule_idx <>
                          ", opidx:" <+> pp ctxAtomIdx <> "},"   $$
-            "    operands: debug::Operands::Semijoin{prefix_vars: " <+> vars ctxAtomIdx <> "}" $$
+            "    operands: debug::Operands::Semijoin{prefix_vars: " <+> post_join_vars ctxAtomIdx <> "}" $$
             "}"
         CtxRuleRAtom{..} | rhsPolarity (ruleRHS ctxRule !! ctxAtomIdx) ->
             "debug::DebugEvent::Activation{"                $$
@@ -1351,7 +1355,7 @@ mkDebug True ctx =
                          "relid:" <+> relid <>
                          ", ruleidx:" <+> pp ?rule_idx <>
                          ", opidx:" <+> pp ctxAtomIdx <> "},"   $$
-            "    operands: debug::Operands::Join{prefix_vars: " <+> vars ctxAtomIdx <>
+            "    operands: debug::Operands::Join{prefix_vars: " <+> post_join_vars ctxAtomIdx <>
                                                 ", val:" <+> vALUE_VAR2 <> ".clone().into_record()}" $$
             "}"
         CtxRuleRAtom{..} ->
@@ -1360,7 +1364,7 @@ mkDebug True ctx =
                          "relid:" <+> relid <>
                          ", ruleidx:" <+> pp ?rule_idx <>
                          ", opidx:" <+> pp ctxAtomIdx <> "},"   $$
-            "    operands: debug::Operands::Antijoin{post_vars: " <+> vars (ctxAtomIdx + 1) <> "}" $$
+            "    operands: debug::Operands::Antijoin{post_vars: " <+> post_join_vars ctxAtomIdx <> "}" $$
             "}"
         _ -> "\"{}\""
 
@@ -1434,11 +1438,11 @@ mkAggregate filters input_val idx = do
             "__f}"
     next <- compileRule idx False
     return $
-        "XFormArrangement::Aggregate{"                                                                                           $$
-        "    description:" <+> (pp $ show $ show $ rulePPPrefix ?rule $ idx + 1) <> ".to_string(),"                              $$
-        (nest' $ "ffun: if __debug__ {" <+> ffun True <+> "}" $$ "else {" <+> ffun False <+> "},")                               $$
-        (nest' $ "aggfun: if __debug__ {" <+> agfun True <+> "}" $$ "else {" <+> agfun False <+> "},")                           $$
-        "    next: Box::new(" <> next <> ")"                                                                                     $$
+        "XFormArrangement::Aggregate{"                                                                  $$
+        "    description:" <+> (pp $ show $ show $ rulePPPrefix ?rule $ idx + 1) <> ".to_string(),"     $$
+        (nest' $ "ffun: if __debug__ {" <+> ffun True <+> "}" $$ "else {" <+> ffun False <+> "},")      $$
+        (nest' $ "aggfun: if __debug__ {" <+> agfun True <+> "}" $$ "else {" <+> agfun False <+> "},")  $$
+        "    next: Box::new(" <> next <> ")"                                                            $$
         "}"
 
 -- Generate Rust code to filter records and bring variables into scope.
