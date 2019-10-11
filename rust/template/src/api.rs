@@ -26,6 +26,13 @@ use flatbuf;
 #[cfg(feature = "flatbuf")]
 use flatbuf::FromFlatBuffer;
 
+pub enum DebugCfg {
+    /// No debugger connected; debugging events are being discarded.
+    Disconnected,
+    ///
+    Connected(Box<dyn Debugger>),
+}
+
 #[derive(Debug)]
 pub struct HDDlog {
     pub prog: Mutex<RunningProgram<Value>>,
@@ -33,9 +40,17 @@ pub struct HDDlog {
     pub db: Option<Arc<Mutex<DeltaMap>>>,
     pub deltadb: Arc<Mutex<Option<DeltaMap>>>,
     pub print_err: Option<extern "C" fn(msg: *const raw::c_char)>,
-    /* When set, all commands sent to the program are recorded in
-     * the specified `.dat` file so that they can be replayed later. */
+    /// When set, all commands sent to the program are recorded in
+    /// the specified `.dat` file so that they can be replayed later. */
     pub replay_file: Option<Mutex<fs::File>>,
+    /// Debugger currently attached to the program or `None` if there is no debugger currently
+    /// attached or if the program was instantiated with debugging disabled.
+    pub debugger: Option<Box<Debugger>>,
+    /// `AtomicPtr` that stores pointer to the currently connected debugger.  This field is `None`
+    /// if the program was instantiated with debugging hooks disabled.  If, however, debugging
+    /// hooks are enabled but there is no debugger connected to the program at the moment, this
+    /// field will contain `Some<AtomicPtr<null>>`.
+    pub debugger_ptr: Option<AtomicPtr<Debugger>>,
 }
 
 /* Public API */
@@ -270,6 +285,7 @@ impl HDDlog {
         do_store: bool,
         cb: UH,
         print_err: Option<extern "C" fn(msg: *const raw::c_char)>,
+        debugger: Option<Option<Debugger>>,
     ) -> HDDlog
     where
         UH: UpdateHandler<Value> + Send + 'static,
@@ -306,12 +322,31 @@ impl HDDlog {
             Box::new(ThreadUpdateHandler::new(handler_generator))
         };
 
-        let program = prog(handler.mt_update_cb());
+        let program = prog(handler.mt_update_cb(), debugger.is_some());
 
         /* Notify handler about initial transaction */
         handler.before_commit();
-        let prog = program.run(workers as usize);
+        let (debugger, debugger_ptr) = match debugger {
+            // Debugging disabled.
+            None => (None, None),
+            // Debugging hooks enabled, but no debugger connected at startup.
+            Some(None) => (None, Some(AtomicPtr::new(null_mut()))),
+            // .
+            Some(Some(d)) => {
+                let b = Box::new(d);
+                (Some(b), Some(AtomicPtr::new(&*b as *mut Debugger)))
+            }
+        }
+        let prog = program.run(workers as usize, debugger_ptr);
         handler.after_commit(true);
+
+    pub debugger: Option<Debugger>,
+    /// `AtomicPtr` that stores pointer to the currently connected debugger.  This field is `None`
+    /// if the program was instantiated with debugging hooks disabled.  If, however, debugging
+    /// hooks are enabled but there is no debugger connected to the program at the moment, this
+    /// field will contain `Some<AtomicPtr<null>>`.
+    pub debugger_ptr: Option<AtomicPtr<Debugger>>,
+
 
         HDDlog {
             prog: Mutex::new(prog),
@@ -320,6 +355,7 @@ impl HDDlog {
             deltadb,
             print_err,
             replay_file: None,
+            debug_ptr,
         }
     }
 

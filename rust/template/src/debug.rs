@@ -10,7 +10,6 @@ use differential_datalog::record::Record;
 /// * `ruleidx` - Index of a rule for this relation.
 ///
 /// * `opidx` - Index of an operator in the body of the rule.
-///
 #[derive(Debug)]
 pub struct OpId {
     pub relid: RelId,
@@ -27,7 +26,6 @@ pub struct OpId {
 /// * `Activation` - similar to a **breakpoint** activation in a conventional
 /// debugger, this event notifies the debugger that an operator in one of
 /// program's rules has been activated.
-///
 #[derive(Debug)]
 pub enum DebugEvent {
     RelationUpdate {
@@ -92,4 +90,8 @@ pub enum Operands {
         group_by: Vec<Record>,
         group: Vec<Record>,
     },
+}
+
+pub trait Debugger: Sync {
+    fn event(&self, evt: DebugEvent);
 }

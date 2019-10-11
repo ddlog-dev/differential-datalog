@@ -65,6 +65,10 @@ use profile::*;
 use record::Mutator;
 use variable::*;
 
+thread_local! {
+    pub static __DEBUGGER__: RefCell<*const AtomicPtr<Debugger>> = RefCell::new(null());
+}
+
 type TValAgent<S, V> = TraceAgent<
     V,
     V,
@@ -1025,7 +1029,7 @@ enum Msg<V: Val> {
 
 impl<V: Val> Program<V> {
     /// Instantiate the program with `nworkers` timely threads.
-    pub fn run(&self, nworkers: usize) -> RunningProgram<V> {
+    pub fn run(&self, nworkers: usize, debugger: *const AtomicPtr<Debugger>) -> RunningProgram<V> {
         /* Clone the program, so that it can be moved into the timely computation */
         let prog = self.clone();
 
@@ -1060,6 +1064,7 @@ impl<V: Val> Program<V> {
         let h = thread::spawn(move ||
             /* start up timely computation */
             timely::execute(Configuration::Process(nworkers), move |worker: &mut Worker<Allocator>| {
+                __DEBUGGER__.store(debugger);
                 let worker_index = worker.index();
                 let probe = probe::Handle::new();
                 {

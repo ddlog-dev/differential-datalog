@@ -1903,8 +1903,8 @@ mkProg nodes = do
                "    ]"                                          $$
                "}"
     return $
-        "pub fn prog(__update_cb: Box<dyn CBFn<Value>>) -> Program<Value> {"  $$
-        (nest' $ rels $$ prog)                                                 $$
+        "pub fn prog(__update_cb: Box<dyn CBFn<Value>>, __debug__: bool) -> Program<Value> {"  $$
+        (nest' $ rels $$ prog)                                                                 $$
         "}"
 
 mkNode :: ProgNode -> Doc
@@ -2222,7 +2222,7 @@ mkExpr' ctx e@EBinOp{..} = (v', EVal)
                             _           -> "string_append(" <> e1 <> "," <+> ref exprRight <> ")"
              op     -> mkBinOp op (e1, t1) (e2, t2)
 
-    -- Truncate bitvector result in case the type used to represent it
+    -- Tuuncate bitvector result in case the type used to represent it
     -- in Rust is larger than the bitvector width.
     v' = if elem exprBOp bopsRequireTruncation
             then mkTruncate v t
