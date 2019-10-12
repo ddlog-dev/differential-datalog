@@ -1312,7 +1312,11 @@ rhsInputArrangement _       _ = Nothing
 mkDebug :: (?d::DatalogProgram, ?rule::Rule, ?rule_idx::Int) => Bool -> ECtx -> Doc
 mkDebug False _ = empty
 mkDebug True ctx =
-    "eprintln!(\"Debugger event: {:?}\"," <+> event <> ");"
+    "if *__DEBUGGER__ != null() {"                           $$
+    "    __DEBUGGER__.load(SeqCst).event(" <> event <> ");"  $$
+    "};"
+
+eprintln!(\"Debugger event: {:?}\"," <+> event <> ");"
     where
     relid = pp $ relIdentifier ?d $ getRelation ?d $ atomRelation $ head $ ruleLHS ?rule
     vars fields = (\fs -> "vec![" <> fs <> "]")

@@ -1,5 +1,6 @@
 use differential_datalog::program::*;
 use differential_datalog::record;
+use differential_datalog::debug::*;
 use differential_datalog::record::IntoRecord;
 
 use libc::size_t;
@@ -14,6 +15,7 @@ use std::os::unix::io::FromRawFd;
 use std::ptr;
 use std::slice;
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::AtomicPtr;
 
 use super::update_handler::*;
 use super::valmap::*;
@@ -25,13 +27,6 @@ use flatbuf;
 
 #[cfg(feature = "flatbuf")]
 use flatbuf::FromFlatBuffer;
-
-pub enum DebugCfg {
-    /// No debugger connected; debugging events are being discarded.
-    Disconnected,
-    ///
-    Connected(Box<dyn Debugger>),
-}
 
 #[derive(Debug)]
 pub struct HDDlog {
@@ -50,7 +45,7 @@ pub struct HDDlog {
     /// if the program was instantiated with debugging hooks disabled.  If, however, debugging
     /// hooks are enabled but there is no debugger connected to the program at the moment, this
     /// field will contain `Some<AtomicPtr<null>>`.
-    pub debugger_ptr: Option<AtomicPtr<Debugger>>,
+    pub debugger_ptr: Option<Box<AtomicPtr<Debugger>>>,
 }
 
 /* Public API */
@@ -78,11 +73,55 @@ impl HDDlog {
         relid2cname(tid).ok_or_else(|| format!("unknown relation {}", tid))
     }
 
-    pub fn run<F>(workers: usize, do_store: bool, cb: F) -> HDDlog
+    pub fn run<F>(workers: usize, do_store: bool, cb: F, debug: bool) -> HDDlog
     where
         F: Callback,
     {
-        Self::do_run(workers, do_store, CallbackUpdateHandler::new(cb), None)
+        Self::do_run(workers,
+                     do_store,
+                     CallbackUpdateHandler::new(cb),
+                     None,
+                     if debug { Some(None) } else { None })
+    }
+
+    pub fn run_with_debugger<F>(workers: usize, do_store: bool, cb: F, debugger: Debugger) -> HDDlog
+    where
+        F: Callback,
+    {
+        Self::do_run(workers,
+                     do_store,
+                     CallbackUpdateHandler::new(cb),
+                     None,
+                     Some(Some(Box::new(debugger))))
+    }
+
+    pub fn attach_debugger(&mut self, debugger: Debugger) -> Result<(), String> {
+        self.do_attach_debugger(Box::new(debugger))
+    }
+
+    fn do_attach_debugger(&mut self, debugger: Box<Debugger>) -> Result<(), String> {
+        let prog = self.prog.lock().unwrap();
+        /* We have a lock on `self.prog`.  No other methods, including `commit`, can be running
+         * now, so the debugger is not being accessed and it's safe to replace it.
+         */
+        if let Some(debugger_ptr) = self.debugger_ptr {
+            self.debugger = Some(debugger);
+            debugger_ptr.store(&*self.debugger as *mut Debugger));
+            Ok(())
+        } else {
+            Err("Cannot attach debugger: the program was started with debugging hooks disabled")
+        }
+    }
+
+    pub fn detach_debugger(&mut self) {
+        let prog = self.prog.lock().unwrap();
+        /* We have a lock on `self.prog`.  No other methods, including `commit`, can be running
+         * now, so the debugger is not being accessed and it's safe to deallocate it.
+         */
+        if let Some(debugger_ptr) = self.debugger_ptr {
+            self.debugger = None;
+            debugger_ptr.store(null_mut());
+        }
     }
 
     pub fn record_commands(&mut self, file: &mut Option<Mutex<fs::File>>) {
@@ -285,7 +324,7 @@ impl HDDlog {
         do_store: bool,
         cb: UH,
         print_err: Option<extern "C" fn(msg: *const raw::c_char)>,
-        debugger: Option<Option<Debugger>>,
+        debugger: Option<Option<Box<Debugger>>>,
     ) -> HDDlog
     where
         UH: UpdateHandler<Value> + Send + 'static,
@@ -326,27 +365,22 @@ impl HDDlog {
 
         /* Notify handler about initial transaction */
         handler.before_commit();
-        let (debugger, debugger_ptr) = match debugger {
+        let (debugger, debugger_ptr, debugger_raw_ptr) = match debugger {
             // Debugging disabled.
-            None => (None, None),
-            // Debugging hooks enabled, but no debugger connected at startup.
-            Some(None) => (None, Some(AtomicPtr::new(null_mut()))),
-            // .
+            None => (None, None, null()),
+            // Debugging hooks enabled, but no debugger connected at startup. 
+            Some(None) => {
+                let ptr = Box::new(AtomicPtr::new(null_mut()));
+                (None, Some(ptr), &*ptr as *const AtomicPtr<Debugger>)
+            },
+            // Debugging hooks enabled; started the program with debugger connected.
             Some(Some(d)) => {
-                let b = Box::new(d);
-                (Some(b), Some(AtomicPtr::new(&*b as *mut Debugger)))
+                let ptr = Box::new(AtomicPtr::new(&*d as *mut Debugger));
+                (Some(d), Some(ptr), &*ptr as *const AtomicPtr<Debugger>)
             }
         }
-        let prog = program.run(workers as usize, debugger_ptr);
+        let prog = program.run(workers as usize, debugger_raw_ptr);
         handler.after_commit(true);
-
-    pub debugger: Option<Debugger>,
-    /// `AtomicPtr` that stores pointer to the currently connected debugger.  This field is `None`
-    /// if the program was instantiated with debugging hooks disabled.  If, however, debugging
-    /// hooks are enabled but there is no debugger connected to the program at the moment, this
-    /// field will contain `Some<AtomicPtr<null>>`.
-    pub debugger_ptr: Option<AtomicPtr<Debugger>>,
-
 
         HDDlog {
             prog: Mutex::new(prog),
@@ -355,7 +389,8 @@ impl HDDlog {
             deltadb,
             print_err,
             replay_file: None,
-            debug_ptr,
+            debugger,
+            debugger_ptr,
         }
     }
 
@@ -629,22 +664,82 @@ pub extern "C" fn ddlog_run(
     >,
     cb_arg: libc::uintptr_t,
     print_err: Option<extern "C" fn(msg: *const raw::c_char)>,
+    debug: bool,
 ) -> *const HDDlog {
-    if let Some(f) = cb {
-        Arc::into_raw(Arc::new(HDDlog::do_run(
-            workers as usize,
-            do_store,
+    Arc::into_raw(Arc::new(HDDlog::do_run(
+        workers as usize,
+        do_store,
+        if let Some(f) = cb {
             ExternCUpdateHandler::new(f, cb_arg),
-            print_err,
-        )))
-    } else {
-        Arc::into_raw(Arc::new(HDDlog::do_run(
-            workers as usize,
-            do_store,
+        } else {
             NullUpdateHandler::new(),
-            print_err,
-        )))
+        }
+        print_err,
+        if (debug) { Some(None) } else { None }
+    )))
+}
+
+#[no_mangle]
+pub extern "C" fn ddlog_run_with_debugger(
+    workers: raw::c_uint,
+    do_store: bool,
+    cb: Option<
+        extern "C" fn(
+            arg: libc::uintptr_t,
+            table: libc::size_t,
+            rec: *const record::Record,
+            w: libc::ssize_t,
+        ),
+    >,
+    cb_arg: libc::uintptr_t,
+    print_err: Option<extern "C" fn(msg: *const raw::c_char)>,
+    debugger: *mut Debugger,
+) -> *const HDDlog {
+    if debugger.is_null() {
+        return -1;
     }
+    Arc::into_raw(Arc::new(HDDlog::do_run(
+        workers as usize,
+        do_store,
+        if let Some(f) = cb {
+            ExternCUpdateHandler::new(f, cb_arg),
+        } else {
+            NullUpdateHandler::new(),
+        }
+        print_err,
+        Some(Some(Box::from_raw(debugger)))
+    )))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ddlog_attach_debugger(
+    prog: *const HDDlog,
+    debugger: *mut Debugger
+) -> raw::c_int {
+    if prog.is_null() {
+        return -1;
+    };
+    let mut prog = Arc::from_raw(prog);
+    let res = prog.do_attach_debugger(Box::from_raw(debugger))
+                  .map(|_| 0)
+                  .unwrap_or_else(|e| {
+                      prog.eprintln(&format!("ddlog_attach_debugger: error: {}", e));
+                      -1
+                  });
+    Arc::into_raw(prog);
+    res
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ddlog_detach_debugger(
+    prog: *const HDDlog
+) {
+    if prog.is_null() {
+        return -1;
+    };
+    let mut prog = Arc::from_raw(prog);
+    prog.detach_debugger();
+    Arc::into_raw(prog);
 }
 
 #[no_mangle]

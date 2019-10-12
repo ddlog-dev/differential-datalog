@@ -24,6 +24,7 @@ pub mod arcval;
 pub mod int;
 pub mod program;
 pub mod uint;
+pub mod debug;
 
 #[macro_use]
 pub mod record;

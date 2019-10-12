@@ -17,11 +17,13 @@ use std::fmt::{self, Debug, Formatter};
 use std::hash::Hash;
 use std::ops::{Add, Deref, Mul};
 use std::result::Result;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Barrier, Mutex, RwLock};
 use std::thread;
 use std::time::Duration;
+use std::cell::RefCell;
+use std::ptr;
 
 use abomonation::Abomonation;
 
@@ -64,9 +66,10 @@ use timely::worker::Worker;
 use profile::*;
 use record::Mutator;
 use variable::*;
+use debug::*;
 
 thread_local! {
-    pub static __DEBUGGER__: RefCell<*const AtomicPtr<Debugger>> = RefCell::new(null());
+    pub static __DEBUGGER__: RefCell<*const AtomicPtr<Debugger>> = RefCell::new(ptr::null());
 }
 
 type TValAgent<S, V> = TraceAgent<

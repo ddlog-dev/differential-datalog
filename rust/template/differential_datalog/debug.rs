@@ -1,7 +1,7 @@
 //! Data types used in debugging hooks.
 
-use differential_datalog::program::RelId;
-use differential_datalog::record::Record;
+use program::RelId;
+use record::Record;
 
 /// Identifies an operator inside a DDlog program.
 ///
