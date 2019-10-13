@@ -21,10 +21,10 @@ mod test;
 mod variable;
 
 pub mod arcval;
+pub mod debug;
 pub mod int;
 pub mod program;
 pub mod uint;
-pub mod debug;
 
 #[macro_use]
 pub mod record;

@@ -12,18 +12,18 @@
 // TODO: namespace cleanup
 // TODO: single input relation
 
+use std::cell::RefCell;
 use std::collections::hash_map;
 use std::fmt::{self, Debug, Formatter};
 use std::hash::Hash;
 use std::ops::{Add, Deref, Mul};
+use std::ptr;
 use std::result::Result;
 use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Barrier, Mutex, RwLock};
 use std::thread;
 use std::time::Duration;
-use std::cell::RefCell;
-use std::ptr;
 
 use abomonation::Abomonation;
 
@@ -63,10 +63,10 @@ use timely::progress::timestamp::Refines;
 use timely::progress::{PathSummary, Timestamp};
 use timely::worker::Worker;
 
+use debug::*;
 use profile::*;
 use record::Mutator;
 use variable::*;
-use debug::*;
 
 thread_local! {
     pub static __DEBUGGER__: RefCell<*const AtomicPtr<Debugger>> = RefCell::new(ptr::null());
@@ -1064,10 +1064,11 @@ impl<V: Val> Program<V> {
         let progress_lock = Arc::new(RwLock::new(0));
         let progress_barrier = Arc::new(Barrier::new(nworkers));
 
+        let debug_ptr = debugger as usize;
         let h = thread::spawn(move ||
             /* start up timely computation */
             timely::execute(Configuration::Process(nworkers), move |worker: &mut Worker<Allocator>| {
-                __DEBUGGER__.store(debugger);
+                __DEBUGGER__.with(|d|d.replace(debug_ptr as *const AtomicPtr<Debugger>));
                 let worker_index = worker.index();
                 let probe = probe::Handle::new();
                 {

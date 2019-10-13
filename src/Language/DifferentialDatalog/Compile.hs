@@ -131,7 +131,6 @@ templateFiles specname =
         [ (dir </> "src/build.rs"               , $(embedFile "rust/template/src/build.rs"))
         , (dir </> "src/main.rs"                , $(embedFile "rust/template/src/main.rs"))
         , (dir </> "src/api.rs"                 , $(embedFile "rust/template/src/api.rs"))
-        , (dir </> "src/debug.rs"               , $(embedFile "rust/template/src/debug.rs"))
         , (dir </> "src/ovsdb.rs"               , $(embedFile "rust/template/src/ovsdb.rs"))
         , (dir </> "src/valmap.rs"              , $(embedFile "rust/template/src/valmap.rs"))
         , (dir </> "src/update_handler.rs"      , $(embedFile "rust/template/src/update_handler.rs"))
@@ -156,6 +155,7 @@ rustLibFiles specname =
         , (dir </> "differential_datalog/lib.rs"                     , $(embedFile "rust/template/differential_datalog/lib.rs"))
         , (dir </> "differential_datalog/test.rs"                    , $(embedFile "rust/template/differential_datalog/test.rs"))
         , (dir </> "differential_datalog/test_record.rs"             , $(embedFile "rust/template/differential_datalog/test_record.rs"))
+        , (dir </> "differential_datalog/debug.rs"                   , $(embedFile "rust/template/differential_datalog/debug.rs"))
         , (dir </> "cmd_parser/Cargo.toml"                           , $(embedFile "rust/template/cmd_parser/Cargo.toml"))
         , (dir </> "cmd_parser/lib.rs"                               , $(embedFile "rust/template/cmd_parser/lib.rs"))
         , (dir </> "cmd_parser/parse.rs"                             , $(embedFile "rust/template/cmd_parser/parse.rs"))
@@ -1312,11 +1312,12 @@ rhsInputArrangement _       _ = Nothing
 mkDebug :: (?d::DatalogProgram, ?rule::Rule, ?rule_idx::Int) => Bool -> ECtx -> Doc
 mkDebug False _ = empty
 mkDebug True ctx =
-    "if *__DEBUGGER__ != null() {"                           $$
-    "    __DEBUGGER__.load(SeqCst).event(" <> event <> ");"  $$
-    "};"
-
-eprintln!(\"Debugger event: {:?}\"," <+> event <> ");"
+    "__DEBUGGER__.with(|d| {"                                                       $$
+    "    if d.as_ptr() != ptr::null_mut() {"                                        $$
+    "        unsafe { ((*(**d.borrow()).load(atomic::Ordering::SeqCst)).event)"     $$
+    "         (" <> event <> ")};"                                                  $$
+    "    }"                                                                         $$
+    "});"
     where
     relid = pp $ relIdentifier ?d $ getRelation ?d $ atomRelation $ head $ ruleLHS ?rule
     vars fields = (\fs -> "vec![" <> fs <> "]")

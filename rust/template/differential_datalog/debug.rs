@@ -2,6 +2,7 @@
 
 use program::RelId;
 use record::Record;
+use std::fmt;
 
 /// Identifies an operator inside a DDlog program.
 ///
@@ -92,6 +93,13 @@ pub enum Operands {
     },
 }
 
-pub trait Debugger: Sync {
-    fn event(&self, evt: DebugEvent);
+pub struct Debugger {
+    pub name: String,
+    pub event: Box<dyn Fn(DebugEvent) + Send>,
+}
+
+impl fmt::Debug for Debugger {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "Debugger ({})", self.name)
+    }
 }

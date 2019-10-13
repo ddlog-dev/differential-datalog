@@ -216,7 +216,7 @@ pub fn main() {
     fn no_op(_table: usize, _rec: &Record, _w: isize) {}
     let cb = if args.print { record_upd } else { no_op };
 
-    let hddlog = HDDlog::run(args.workers, args.store, cb);
+    let hddlog = HDDlog::run(args.workers, args.store, cb, false);
 
     let ret = run(hddlog, args.delta);
     exit(ret);

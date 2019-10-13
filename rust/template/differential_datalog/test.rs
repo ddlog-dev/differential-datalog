@@ -21,6 +21,7 @@ use differential_dataflow::Collection;
 use fnv::FnvHashMap;
 use std::collections::btree_map::{BTreeMap, Entry};
 use std::iter::FromIterator;
+use std::ptr;
 use std::sync::{Arc, Mutex};
 use timely::communication::Allocator;
 use timely::dataflow::scopes::*;
@@ -346,7 +347,7 @@ fn test_multiple_stops() {
         init_data: vec![],
     };
 
-    let mut running = prog.run(2);
+    let mut running = prog.run(2, ptr::null());
     running.stop().unwrap();
     running.stop().unwrap();
 }
@@ -376,7 +377,7 @@ fn test_one_relation(nthreads: usize) {
         init_data: vec![],
     };
 
-    let mut running = prog.run(nthreads);
+    let mut running = prog.run(nthreads, ptr::null());
 
     /* 1. Insertion */
     let vals: Vec<u64> = (0..TEST_SIZE).collect();
@@ -490,7 +491,7 @@ fn test_two_relations(nthreads: usize) {
         init_data: vec![],
     };
 
-    let mut running = prog.run(nthreads);
+    let mut running = prog.run(nthreads, ptr::null());
 
     /* 1. Populate T1 */
     let vals: Vec<u64> = (0..TEST_SIZE).collect();
@@ -640,7 +641,7 @@ fn test_semijoin(nthreads: usize) {
         init_data: vec![],
     };
 
-    let mut running = prog.run(nthreads);
+    let mut running = prog.run(nthreads, ptr::null());
 
     let vals: Vec<u64> = (0..TEST_SIZE).collect();
     let set = BTreeMap::from_iter(vals.iter().map(|x| {
@@ -800,7 +801,7 @@ fn test_join(nthreads: usize) {
         init_data: vec![],
     };
 
-    let mut running = prog.run(nthreads);
+    let mut running = prog.run(nthreads, ptr::null());
 
     let vals: Vec<u64> = (0..TEST_SIZE).collect();
     let set = BTreeMap::from_iter(vals.iter().map(|x| {
@@ -966,7 +967,7 @@ fn test_antijoin(nthreads: usize) {
         init_data: vec![],
     };
 
-    let mut running = prog.run(nthreads);
+    let mut running = prog.run(nthreads, ptr::null());
 
     let vals: Vec<u64> = (0..TEST_SIZE).collect();
     let set = BTreeMap::from_iter(vals.iter().map(|x| {
@@ -1191,7 +1192,7 @@ fn test_map(nthreads: usize) {
         init_data: vec![],
     };
 
-    let mut running = prog.run(nthreads);
+    let mut running = prog.run(nthreads, ptr::null());
 
     let vals: Vec<u64> = (0..TEST_SIZE).collect();
     let set = BTreeMap::from_iter(vals.iter().map(|x| (Value::u64(*x), 1)));
@@ -1351,7 +1352,7 @@ fn test_recursion(nthreads: usize) {
         }
     };
 
-    fn ffun(v: &Value) -> bool {
+    fn ffun(_: &Value, v: &Value) -> bool {
         match &v {
             Value::Tuple2(fst, snd) => fst != snd,
             _ => false,
@@ -1390,7 +1391,7 @@ fn test_recursion(nthreads: usize) {
                                     description: "...join (2,1)".to_string(),
                                     ffun: None,
                                     arrangement: (2, 1),
-                                    post_ffun: Some(&(ffun as FilterFunc<Value>)),
+                                    post_ffun: Some(&(ffun as AntijoinFunc<Value>)),
                                     next: Box::new(None),
                                 }),
                             })),
@@ -1418,7 +1419,7 @@ fn test_recursion(nthreads: usize) {
         init_data: vec![],
     };
 
-    let mut running = prog.run(nthreads);
+    let mut running = prog.run(nthreads, ptr::null());
 
     /* 1. Populate parent relation */
     /*

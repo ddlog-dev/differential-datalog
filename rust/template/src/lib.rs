@@ -42,6 +42,7 @@ use timely::worker;
 
 use abomonation::Abomonation;
 use differential_datalog::arcval;
+use differential_datalog::debug;
 use differential_datalog::int::*;
 use differential_datalog::program::*;
 use differential_datalog::record;
@@ -67,6 +68,7 @@ use std::os::unix;
 use std::os::unix::io::{FromRawFd, IntoRawFd};
 use std::ptr;
 use std::sync;
+use std::sync::atomic;
 
 pub mod api;
 pub mod ovsdb;
