@@ -7,8 +7,8 @@ extern crate num;
 #[macro_use]
 extern crate serde_derive;
 extern crate libc;
-extern crate serde;
 extern crate log;
+extern crate serde;
 
 extern crate timely;
 //extern crate timely_communication;

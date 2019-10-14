@@ -4,12 +4,12 @@ use debug::*;
 use log;
 
 pub struct LogDebugger {
-    level: log::Level
+    level: log::Level,
 }
 
 impl LogDebugger {
     pub fn new(level: log::Level) -> LogDebugger {
-        LogDebugger{level}
+        LogDebugger { level }
     }
 }
 

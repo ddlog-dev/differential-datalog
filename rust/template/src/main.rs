@@ -10,9 +10,9 @@
 extern crate cmd_parser;
 extern crate datalog_example_ddlog;
 extern crate differential_datalog;
-extern crate time;
 extern crate log;
 extern crate simplelog;
+extern crate time;
 
 #[macro_use]
 extern crate rustop;
@@ -26,10 +26,10 @@ use std::sync::Mutex;
 use api::{updcmd2upd, HDDlog};
 use cmd_parser::*;
 use datalog_example_ddlog::*;
+use differential_datalog::debug::*;
+use differential_datalog::debug_log::*;
 use differential_datalog::program::*;
 use differential_datalog::record::*;
-use differential_datalog::debug_log::*;
-use differential_datalog::debug::*;
 use std::io::Write;
 use time::precise_time_ns;
 
@@ -223,15 +223,22 @@ pub fn main() {
     let cb = if args.print { record_upd } else { no_op };
 
     let hddlog = match args.trace {
-        None => {
-            HDDlog::run(args.workers, args.store, cb, false)
-        },
+        None => HDDlog::run(args.workers, args.store, cb, false),
         Some(trace_file) => {
-            simplelog::WriteLogger::init(simplelog::LevelFilter::Trace, 
-                                         simplelog::Config::default(),
-                                         File::create(trace_file).unwrap()).unwrap();
-            HDDlog::run_with_debugger(args.workers, args.store, cb,
-                                      Debugger{debugger: Box::new(LogDebugger::new(log::Level::Trace))})
+            simplelog::WriteLogger::init(
+                simplelog::LevelFilter::Trace,
+                simplelog::Config::default(),
+                File::create(trace_file).unwrap(),
+            )
+            .unwrap();
+            HDDlog::run_with_debugger(
+                args.workers,
+                args.store,
+                cb,
+                Debugger {
+                    debugger: Box::new(LogDebugger::new(log::Level::Trace)),
+                },
+            )
         }
     };
 
