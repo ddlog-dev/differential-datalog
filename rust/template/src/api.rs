@@ -375,7 +375,7 @@ impl HDDlog {
 
         /* Notify handler about initial transaction */
         handler.before_commit();
-        let (debugger, debugger_ptr, debugger_raw_ptr) = if debug {
+        let (debugger, debugger_ptr, debugger_raw_ptr) = if !debug {
             // Debugging disabled.
             (None, None, ptr::null())
         } else {

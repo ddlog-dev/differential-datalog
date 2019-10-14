@@ -121,6 +121,13 @@ extern const char* ddlog_get_table_name(table_id id);
  *
  * Setting `print_err_msg` to NULL causes ddlog to print to `stderr`.
  *
+ * `debug` - run the program with debugging hooks enabled.  If set to `true`,
+ * the `ddlog_attach_debugger()` function can later be used to attach a debugger
+ * to the program (however, a small runtime overhead will be incurred even when
+ * no debugger is attached).  Otherwise, the program will run with debugging
+ * hooks disabled and attempts to call `ddlog_attach_debugger()` on it will
+ * fail.
+ *
  * Returns a program handle to be used in subsequent calls to
  * `ddlog_transaction_start()`,
  * `ddlog_transaction_commit()`, etc., or NULL in case of error.
@@ -133,7 +140,8 @@ extern ddlog_prog ddlog_run(
                    const ddlog_record *rec,
                    ssize_t weight),
         uintptr_t cb_arg,
-        void (*print_err_msg)(const char *msg));
+        void (*print_err_msg)(const char *msg)
+        bool debug);
 
 /*
  * Record commands issued to DDlog via this API in a file.

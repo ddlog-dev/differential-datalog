@@ -156,6 +156,7 @@ rustLibFiles specname =
         , (dir </> "differential_datalog/test.rs"                    , $(embedFile "rust/template/differential_datalog/test.rs"))
         , (dir </> "differential_datalog/test_record.rs"             , $(embedFile "rust/template/differential_datalog/test_record.rs"))
         , (dir </> "differential_datalog/debug.rs"                   , $(embedFile "rust/template/differential_datalog/debug.rs"))
+        , (dir </> "differential_datalog/debug_log.rs"               , $(embedFile "rust/template/differential_datalog/debug_log.rs"))
         , (dir </> "cmd_parser/Cargo.toml"                           , $(embedFile "rust/template/cmd_parser/Cargo.toml"))
         , (dir </> "cmd_parser/lib.rs"                               , $(embedFile "rust/template/cmd_parser/lib.rs"))
         , (dir </> "cmd_parser/parse.rs"                             , $(embedFile "rust/template/cmd_parser/parse.rs"))
@@ -1219,9 +1220,7 @@ compileRule last_rhs_idx input_val = {-trace ("compileRule " ++ show ?rule ++ " 
                                then getJoinArrangement (atomRelation fstatom) $ fromJust input_arrangement
                                else return Nothing
     -- Open up input constructor; bring Datalog variables into scope
-    open <- if input_val
-               then openAtom  vALUE_VAR 0 (rhsAtom $ head ruleRHS) "return None"
-               else openTuple vALUE_VAR $ rhsVarsAfter last_rhs_idx
+    open <- openAtomOrTuple vALUE_VAR input_val (rhsVarsAfter last_rhs_idx) "return None"
     -- Apply filters and assignments between last_rhs_idx and rhs_idx
     let filters debug = mkFilters debug last_rhs_idx
     let prefix debug = open $+$ vcat (filters debug)
@@ -1314,8 +1313,8 @@ mkDebug False _ = empty
 mkDebug True ctx =
     "__DEBUGGER__.with(|d| {"                                                       $$
     "    if d.as_ptr() != ptr::null_mut() {"                                        $$
-    "        unsafe { ((*(**d.borrow()).load(atomic::Ordering::SeqCst)).event)"     $$
-    "         (" <> event <> ")};"                                                  $$
+    "        unsafe { (*(**d.borrow()).load(atomic::Ordering::SeqCst)).debugger"    $$
+    "        .event(" <> event <> ")};"                                             $$
     "    }"                                                                         $$
     "});"
     where
@@ -1422,9 +1421,7 @@ mkAggregate filters input_val idx = do
     -- Filter inputs before grouping
     ffun <- mkFFun filters
     -- Function to extract the argument of aggregation function from 'Value'
-    open <- if input_val
-               then openAtom vALUE_VAR 0 (rhsAtom $ head ruleRHS) "unreachable!()"
-               else openTuple vALUE_VAR group_vars
+    open <- openAtomOrTuple vALUE_VAR input_val group_vars "unreachable!()"
     let project = "&{fn __f(" <> vALUE_VAR <> ": &Value) -> " <+> mkType (exprType ?d ctx rhsAggExpr)   $$
                   (braces' $ open $$ mkExpr ctx rhsAggExpr EVal)                                        $$
                   "__f}"
@@ -1497,6 +1494,13 @@ openTuple var vs = do
         "    },"                                                        $$
         "    _ => unreachable!()"                                       $$
         "};"
+
+-- Generate Rust code to open up tuples and bring variables into scope.
+openAtomOrTuple :: (?cfg::CompilerConfig, ?d::DatalogProgram, ?rule::Rule) => Doc -> Bool -> [Field] -> Doc -> CompilerMonad Doc
+openAtomOrTuple var True _ on_error =
+    openAtom var 0 (rhsAtom $ head $ ruleRHS ?rule) on_error
+openAtomOrTuple var False vs _ =
+    openTuple var vs
 
 -- Generate Rust constructor name for a type;
 -- add type to CompilerMonad
@@ -1625,9 +1629,7 @@ mkJoin input_filters input_val atom join_idx = do
                          (rhsVarsAfter join_idx)
     -- Open input Value or tuple.  We may need to do this twice: once to filter
     -- input before join and once to filter output of the join.
-    let open_input v = if input_val
-                          then openAtom v 0 (rhsAtom $ ruleRHS !! 0) "return None"
-                          else openTuple v post_join_vars
+    let open_input v = openAtomOrTuple v input_val post_join_vars "return None"
     -- Filter inputs using 'input_filters'
     ffun <- mkFFun input_filters
     -- simplify pattern to only extract new variables from it
@@ -1688,7 +1690,7 @@ mkAntijoin input_filters input_val Atom{..} ajoin_idx = do
     let (arr, _) = normalizeArrangement ctx atomVal
     -- Filter inputs using 'input_filters'
     ffun <- mkFFun input_filters
-    post_open <- openTuple vALUE_VAR (rhsVarsAfter ajoin_idx)
+    post_open <- openAtomOrTuple vALUE_VAR input_val (rhsVarsAfter ajoin_idx) "unreachable!()"
     let post_ffun False = "None"
         post_ffun True =
             "Some(&{fn __f(" <> kEY_VAR <> ": &Value, " <> vALUE_VAR <> ": &Value) -> bool"        $$

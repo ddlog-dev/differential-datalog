@@ -8,6 +8,7 @@ extern crate num;
 extern crate serde_derive;
 extern crate libc;
 extern crate serde;
+extern crate log;
 
 extern crate timely;
 //extern crate timely_communication;
@@ -22,6 +23,7 @@ mod variable;
 
 pub mod arcval;
 pub mod debug;
+pub mod debug_log;
 pub mod int;
 pub mod program;
 pub mod uint;

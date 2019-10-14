@@ -11,10 +11,13 @@ extern crate cmd_parser;
 extern crate datalog_example_ddlog;
 extern crate differential_datalog;
 extern crate time;
+extern crate log;
+extern crate simplelog;
 
 #[macro_use]
 extern crate rustop;
 
+use std::fs::File;
 use std::io::stdout;
 use std::process::exit;
 use std::sync::Arc;
@@ -25,6 +28,8 @@ use cmd_parser::*;
 use datalog_example_ddlog::*;
 use differential_datalog::program::*;
 use differential_datalog::record::*;
+use differential_datalog::debug_log::*;
+use differential_datalog::debug::*;
 use std::io::Write;
 use time::precise_time_ns;
 
@@ -197,6 +202,7 @@ pub fn main() {
         opt delta:bool=true, desc:"Do not record changes.";                               // --no-delta
         opt print:bool=true, desc:"Do not print deltas.";                                 // --no-print
         opt workers:usize=4, short:'w', desc:"The number of worker threads.";             // --workers or -w
+        opt trace:Option<String>, desc:"Write program trace to file.";                    // --trace
     };
     let (args, rest) = parser.parse_or_exit();
 
@@ -216,7 +222,18 @@ pub fn main() {
     fn no_op(_table: usize, _rec: &Record, _w: isize) {}
     let cb = if args.print { record_upd } else { no_op };
 
-    let hddlog = HDDlog::run(args.workers, args.store, cb, false);
+    let hddlog = match args.trace {
+        None => {
+            HDDlog::run(args.workers, args.store, cb, false)
+        },
+        Some(trace_file) => {
+            simplelog::WriteLogger::init(simplelog::LevelFilter::Trace, 
+                                         simplelog::Config::default(),
+                                         File::create(trace_file).unwrap()).unwrap();
+            HDDlog::run_with_debugger(args.workers, args.store, cb,
+                                      Debugger{debugger: Box::new(LogDebugger::new(log::Level::Trace))})
+        }
+    };
 
     let ret = run(hddlog, args.delta);
     exit(ret);

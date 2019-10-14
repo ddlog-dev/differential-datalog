@@ -8,8 +8,9 @@ function usage {
     echo "Run one Datalog test"
     echo "The following environment variables control this script:"
     echo "- DDLOGFLAGS controls the ddlog compilation process"
-    echo "- RUSTFLAGS controls the Rust compiler flags"
-    echo "- CARGOFLAGS controls the cargo (Rust package system) compilation flags"
+    echo "- RUSTFLAGS controls Rust compiler flags"
+    echo "- CARGOFLAGS controls cargo (Rust package system) compilation flags"
+    echo "- CLIFLAGS controls arguments to the generated _cli executable"
     exit 1
 }
 
@@ -53,7 +54,7 @@ make -C ../../java
 
 if [ -f ${base}.dat ]; then
     # Run script with input data
-    ${base}_ddlog/target/${build}/${base}_cli --no-print <${base}.dat >${base}.dump
+    ${base}_ddlog/target/${build}/${base}_cli --no-print ${CLIFLAGS} < ${base}.dat > ${base}.dump
     # Compare outputs
     if [ -f ${base}.dump.expected.gz ]; then
         zdiff -q ${base}.dump ${base}.dump.expected.gz
