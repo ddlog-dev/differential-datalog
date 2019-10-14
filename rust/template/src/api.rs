@@ -82,7 +82,8 @@ impl HDDlog {
             do_store,
             CallbackUpdateHandler::new(cb),
             None,
-            if debug { Some(None) } else { None },
+            debug,
+            None,
         )
     }
 
@@ -95,7 +96,8 @@ impl HDDlog {
             do_store,
             CallbackUpdateHandler::new(cb),
             None,
-            Some(Some(Box::new(debugger))),
+            true,
+            Some(Box::new(debugger)),
         )
     }
 
@@ -331,7 +333,8 @@ impl HDDlog {
         do_store: bool,
         cb: UH,
         print_err: Option<extern "C" fn(msg: *const raw::c_char)>,
-        debugger: Option<Option<Box<Debugger>>>,
+        debug: bool,
+        debugger: Option<Box<Debugger>>,
     ) -> HDDlog
     where
         UH: UpdateHandler<Value> + Send + 'static,
@@ -368,24 +371,27 @@ impl HDDlog {
             Box::new(ThreadUpdateHandler::new(handler_generator))
         };
 
-        let program = prog(handler.mt_update_cb(), debugger.is_some());
+        let program = prog(handler.mt_update_cb(), debug);
 
         /* Notify handler about initial transaction */
         handler.before_commit();
-        let (debugger, debugger_ptr, debugger_raw_ptr) = match debugger {
+        let (debugger, debugger_ptr, debugger_raw_ptr) = if debug {
             // Debugging disabled.
-            None => (None, None, ptr::null()),
-            // Debugging hooks enabled, but no debugger connected at startup.
-            Some(None) => {
-                let ptr = Box::new(AtomicPtr::new(ptr::null_mut()));
-                let raw_ptr = &*ptr as *const AtomicPtr<Debugger>;
-                (None, Some(ptr), raw_ptr)
-            }
-            // Debugging hooks enabled; started the program with debugger connected.
-            Some(Some(mut d)) => {
-                let ptr = Box::new(AtomicPtr::new(&mut *d as *mut Debugger));
-                let raw_ptr = &*ptr as *const AtomicPtr<Debugger>;
-                (Some(d), Some(ptr), raw_ptr)
+            (None, None, ptr::null())
+        } else {
+            match debugger {
+                // Debugging hooks enabled, but no debugger connected at startup.
+                None => {
+                    let ptr = Box::new(AtomicPtr::new(ptr::null_mut()));
+                    let raw_ptr = &*ptr as *const AtomicPtr<Debugger>;
+                    (None, Some(ptr), raw_ptr)
+                }
+                // Debugging hooks enabled; started the program with debugger connected.
+                Some(mut d) => {
+                    let ptr = Box::new(AtomicPtr::new(&mut *d as *mut Debugger));
+                    let raw_ptr = &*ptr as *const AtomicPtr<Debugger>;
+                    (Some(d), Some(ptr), raw_ptr)
+                }
             }
         };
         let prog = program.run(workers as usize, debugger_raw_ptr);
@@ -681,7 +687,8 @@ pub extern "C" fn ddlog_run(
             do_store,
             ExternCUpdateHandler::new(f, cb_arg),
             print_err,
-            if (debug) { Some(None) } else { None },
+            debug,
+            None,
         )))
     } else {
         Arc::into_raw(Arc::new(HDDlog::do_run(
@@ -689,7 +696,8 @@ pub extern "C" fn ddlog_run(
             do_store,
             NullUpdateHandler::new(),
             print_err,
-            if (debug) { Some(None) } else { None },
+            debug,
+            None,
         )))
     }
 }
@@ -720,7 +728,8 @@ pub unsafe extern "C" fn ddlog_run_with_debugger(
             do_store,
             ExternCUpdateHandler::new(f, cb_arg),
             print_err,
-            Some(Some(Box::from_raw(debugger))),
+            true,
+            Some(Box::from_raw(debugger)),
         )))
     } else {
         Arc::into_raw(Arc::new(HDDlog::do_run(
@@ -728,7 +737,8 @@ pub unsafe extern "C" fn ddlog_run_with_debugger(
             do_store,
             NullUpdateHandler::new(),
             print_err,
-            Some(Some(Box::from_raw(debugger))),
+            true,
+            Some(Box::from_raw(debugger)),
         )))
     }
 }
