@@ -26,12 +26,22 @@ pub struct OpId {
 /// rule are not included in the context.
 #[derive(Debug)]
 pub enum Operands {
-    /// FlatMap: variables declared in previous operators that
+    /// FlatMap: 
+    /// * `vars` - variables declared in previous operators that
     /// are used in the FlatMap operator or in the rest of the rule.
-    FlatMap { vars: Vec<Record> },
-    /// Filter: variables declared in previous operators that
+    /// * `output` - computed output records.
+    FlatMap {
+        vars: Vec<Record>,
+        output: Vec<Record>
+    },
+    /// Filter: 
+    /// * `vars` - variables declared in previous operators that
     /// are used in the Filter operator or in the rest of the rule.
-    Filter { vars: Vec<Record> },
+    /// * `output` - true iff the filter condition is satisfied.
+    Filter {
+        vars: Vec<Record>,
+        output: bool
+    },
     /// Join:
     /// * `prefix_vars` - variables declared in previous operators
     /// that are used in operators **following** the join.
@@ -59,9 +69,11 @@ pub enum Operands {
     /// Aggregate:
     /// * `group_by` - group-by variables.
     /// * `group` - all values in a group.
+    /// * `output` - computed aggregate value.
     Aggregate {
         group_by: Vec<Record>,
         group: Vec<Record>,
+        ouput: Record
     },
 }
 
