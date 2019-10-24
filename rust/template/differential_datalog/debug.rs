@@ -30,18 +30,12 @@ pub enum Operands {
     /// * `vars` - variables declared in previous operators that
     /// are used in the FlatMap operator or in the rest of the rule.
     /// * `output` - computed output collection.
-    FlatMap {
-        vars: Vec<Record>,
-        output: Record
-    },
+    FlatMap { vars: Vec<Record>, output: Record },
     /// Filter:
     /// * `vars` - variables declared in previous operators that
     /// are used in the Filter operator or in the rest of the rule.
     /// * `output` - true iff the filter condition is satisfied.
-    Filter {
-        vars: Vec<Record>,
-        output: bool
-    },
+    Filter { vars: Vec<Record>, output: bool },
     /// Assign:
     /// * `vars` - variables declared in previous operators that
     /// are used in the assignment operator or in the rest of the rule.
@@ -50,7 +44,7 @@ pub enum Operands {
     /// LHS variables.
     Assign {
         vars: Vec<Record>,
-        output: Option<Vec<Record>>
+        output: Option<Vec<Record>>,
     },
     /// Join:
     /// * `prefix_vars` - variables declared in previous operators
@@ -83,7 +77,7 @@ pub enum Operands {
     Aggregate {
         group_by: Vec<Record>,
         group: Vec<Record>,
-        output: Record
+        output: Record,
     },
 }
 
