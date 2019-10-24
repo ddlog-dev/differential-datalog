@@ -1,4 +1,4 @@
-pub type Set<T> = FnvHashSet<T>;
+use super::__std;
 
 pub fn build_dhcp_netmask(_cidr: &String) -> String {
     "not implemented: build_dhcp_netmask".to_owned()
@@ -6,15 +6,15 @@ pub fn build_dhcp_netmask(_cidr: &String) -> String {
 pub fn eth_addr_from_string(_str: &String) -> std_Option<mac_addr_t> {
     std_Option::std_None
 }
-pub fn extract_ips(_str: &String) -> Set<ip_addr_t> {
-    FnvHashSet::default()
+pub fn extract_ips(_str: &String) -> __std::std_Set<ip_addr_t> {
+    __std::std_Set::new()
 }
 
 pub fn extract_mac(_str: &String) -> (mac_addr_t, String) {
     (0, "extract_mac not implemented".to_owned())
 }
-pub fn extract_subnets(_str: &String) -> Set<ip_subnet_t> {
-    FnvHashSet::default()
+pub fn extract_subnets(_str: &String) -> __std::std_Set<ip_subnet_t> {
+    __std::std_Set::new()
 }
 
 pub fn in6_generate_lla(_mac: &mac_addr_t) -> ip6_addr_t {

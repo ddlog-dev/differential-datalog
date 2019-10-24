@@ -110,7 +110,7 @@ ctxIsRuleRCond _              = False
 
 ctxIsRuleRAssignment :: ECtx -> Bool
 ctxIsRuleRAssignment CtxRuleRCond{..} =
-    case rhsExpr $ruleRHS ctxRule !! ctxIdx of
+    case rhsExpr $ ruleRHS ctxRule !! ctxIdx of
          E ESet{} -> True
          _        -> False
 ctxIsRuleRAssignment _                = False
