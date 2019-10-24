@@ -42,6 +42,7 @@ module Language.DifferentialDatalog.ECtx(
      ctxIsBinding,
      ctxIsTyped,
      ctxIsRuleRCond,
+     ctxIsRuleRAssignment,
      ctxInRuleRHSPositivePattern,
      ctxInRuleRHSPattern,
      ctxIsFunc)
@@ -106,6 +107,13 @@ ctxIsTyped _          = False
 ctxIsRuleRCond :: ECtx -> Bool
 ctxIsRuleRCond CtxRuleRCond{} = True
 ctxIsRuleRCond _              = False
+
+ctxIsRuleRAssignment :: ECtx -> Bool
+ctxIsRuleRAssignment CtxRuleRCond{..} =
+    case rhsExpr $ruleRHS ctxRule !! ctxIdx of
+         E ESet{} -> True
+         _        -> False
+ctxIsRuleRAssignment _                = False
 
 -- | True if context is inside a positive right-hand-side literal of a
 -- rule, in a pattern expression, i.e., an expression where new

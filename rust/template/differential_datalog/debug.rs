@@ -26,21 +26,31 @@ pub struct OpId {
 /// rule are not included in the context.
 #[derive(Debug)]
 pub enum Operands {
-    /// FlatMap: 
+    /// FlatMap:
     /// * `vars` - variables declared in previous operators that
     /// are used in the FlatMap operator or in the rest of the rule.
-    /// * `output` - computed output records.
+    /// * `output` - computed output collection.
     FlatMap {
         vars: Vec<Record>,
-        output: Vec<Record>
+        output: Record
     },
-    /// Filter: 
+    /// Filter:
     /// * `vars` - variables declared in previous operators that
     /// are used in the Filter operator or in the rest of the rule.
     /// * `output` - true iff the filter condition is satisfied.
     Filter {
         vars: Vec<Record>,
         output: bool
+    },
+    /// Assign:
+    /// * `vars` - variables declared in previous operators that
+    /// are used in the assignment operator or in the rest of the rule.
+    /// * `output` - `None`: right-hand side of the assignment does not
+    /// match the left-hand-side pattern. `Some(_)` - values assigned to
+    /// LHS variables.
+    Assign {
+        vars: Vec<Record>,
+        output: Option<Vec<Record>>
     },
     /// Join:
     /// * `prefix_vars` - variables declared in previous operators
@@ -73,7 +83,7 @@ pub enum Operands {
     Aggregate {
         group_by: Vec<Record>,
         group: Vec<Record>,
-        ouput: Record
+        output: Record
     },
 }
 

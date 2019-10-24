@@ -1308,9 +1308,12 @@ rhsInputArrangement _       _ = Nothing
 -- Generate debugging hook for the given context.
 -- The first argument is 'True' iff assembling the dataflow with debugging
 -- enabled.
-mkDebug :: (?d::DatalogProgram, ?rule::Rule, ?rule_idx::Int) => Bool -> ECtx -> Doc
-mkDebug False _ = empty
-mkDebug True ctx =
+-- 'success' is only used with 'CtxRuleRCond' and is true when invoking the
+-- debuggin hook from the path where the condition is true (or the pattern
+-- is satisfied).
+mkDebug :: (?d::DatalogProgram, ?rule::Rule, ?rule_idx::Int) => Bool -> ECtx -> Bool -> Doc
+mkDebug False _ _ = empty
+mkDebug True ctx success =
     "__DEBUGGER__.with(|d| {"                                                       $$
     "    if d.as_ptr() != ptr::null_mut() {"                                        $$
     "        unsafe { (*(**d.borrow()).load(atomic::Ordering::SeqCst)).debugger"    $$
@@ -1331,7 +1334,17 @@ mkDebug True ctx =
                          "relid:" <+> relid <>
                          ", ruleidx:" <+> pp ?rule_idx <>
                          ", opidx:" <+> pp ctxIdx <> "},"   $$
-            "    operands: debug::Operands::FlatMap{vars:" <+> (vars $ rhsVarsAfter (ctxIdx-1)) <> "}" $$
+            "    operands: debug::Operands::FlatMap{vars:" <+> (vars $ rhsVarsAfter (ctxIdx-1)) <>
+                    ", output: __flattened.clone().into_record()}" $$
+            "}"
+        CtxRuleRCond{..} | ctxIsRuleRAssignment ctx ->
+            "debug::DebugEvent::Activation{"                $$
+            "    opid: debug::OpId{" <>
+                         "relid:" <+> relid <>
+                         ", ruleidx:" <+> pp ?rule_idx <>
+                         ", opidx:" <+> pp ctxIdx <> "},"   $$
+            "    operands: debug::Operands::Assign{vars:" <+> (vars $ rhsVarsAfter (ctxIdx-1)) <>
+                    ", output:" <+> (if success then "Some(" <> (vars $ ruleRHSNewVars ?d ?rule ctxIdx) <> ")" else "None") <> "}" $$
             "}"
         CtxRuleRCond{..} ->
             "debug::DebugEvent::Activation{"                $$
@@ -1339,8 +1352,10 @@ mkDebug True ctx =
                          "relid:" <+> relid <>
                          ", ruleidx:" <+> pp ?rule_idx <>
                          ", opidx:" <+> pp ctxIdx <> "},"   $$
-            "    operands: debug::Operands::Filter{vars:" <+> (vars $ rhsVarsAfter (ctxIdx-1)) <> "}" $$
+            "    operands: debug::Operands::Filter{vars:" <+> (vars $ rhsVarsAfter (ctxIdx-1)) <>
+                    ", output:" <+> (if success then "true" else "false") <> "}" $$
             "}"
+
         -- Semijoin
         CtxRuleRAtom{..} | rhsPolarity (ruleRHS ctxRule !! ctxAtomIdx) &&
                            rhsIsSemijoin ctxAtomIdx ->
@@ -1379,8 +1394,9 @@ mkDebug True ctx =
                          "relid:" <+> relid <>
                          ", ruleidx:" <+> pp ?rule_idx <>
                          ", opidx:" <+> pp ctxIdx <> "},"   $$
-            "    operands: debug::Operands::Aggregate{group_by:" <+> vars (map (getVar ?d ctx) rhsGroupBy) <> 
-                    ", group:" <+> gROUP_VAR <> ".iter().map(|(val,_)|(*val).clone().into_record()).collect()}" $$
+            "    operands: debug::Operands::Aggregate{group_by:" <+> vars (map (getVar ?d ctx) rhsGroupBy) <>
+                    ", group:" <+> gROUP_VAR <> ".iter().map(|(val,_)|(*val).clone().into_record()).collect()" <>
+                    ", output:" <+> pp rhsVar <> ".clone().into_record()}" $$
             "}"
         _ -> error $ "Compile.mkDebug: unexpected context " ++ show ctx
 
@@ -1397,10 +1413,10 @@ mkFlatMap prefix idx v e = do
     let fmfun debug =
             "&{fn __f(" <> vALUE_VAR <> ": Value) -> Option<Box<dyn Iterator<Item=Value>>>"                 $$
                 (braces' $
-                     prefix debug       $$
-                     mkDebug debug ctx  $$
-                     flatten            $$
-                     clones             $$
+                     prefix debug           $$
+                     flatten                $$
+                     mkDebug debug ctx True $$
+                     clones                 $$
                      "Some(Box::new(__flattened.into_iter().map(move |" <> pp v <> "|" <> vars <> ")))")    $$
              "__f}"
     next <- compileRule idx False
@@ -1437,9 +1453,9 @@ mkAggregate filters input_val idx = do
     open_key <- openTuple ("*" <> kEY_VAR) key_vars
     let agfun debug =
             "&{fn __f(" <> kEY_VAR <> ": &Value," <+> gROUP_VAR <> ": &[(&Value, Weight)]) -> Value"    $$
-            (braces' $ open_key          $$
-                       mkDebug debug ctx $$
-                       aggregate         $$
+            (braces' $ open_key                 $$
+                       aggregate                $$
+                       mkDebug debug ctx True   $$
                        result)                                                                          $$
             "__f}"
     next <- compileRule idx False
@@ -1563,20 +1579,21 @@ mkFilters debug last_idx =
     $ drop (last_idx+1) ruleRHS
 
 -- Implement RHSCondition semantics in Rust; brings new variables into
--- scope if this is an assignment
+-- scope if this is an assignment.
 mkFilter :: (?d::DatalogProgram, ?rule::Rule, ?rule_idx::Int) => Bool -> ECtx -> Expr -> Doc
 mkFilter debug ctx (E e@ESet{..}) = mkAssignFilter debug ctx e
 mkFilter debug ctx e              = mkCondFilter debug ctx e
 
 mkAssignFilter :: (?d::DatalogProgram, ?rule::Rule, ?rule_idx::Int) => Bool -> ECtx -> ENode -> Doc
 mkAssignFilter debug ctx e@(ESet _ l r) =
-    mkDebug debug ctx                                               $$
     "let" <+> vardecls <+> "= match" <+> r' <+> "{"                 $$
     (nest' mtch)                                                    $$
     "};"
     where
     r' = mkExpr (CtxSetR e ctx) r EVal
-    mtch = mkMatch (mkPatExpr (CtxSetL e ctx) l EVal) vars "return None"
+    mtch = mkMatch (mkPatExpr (CtxSetL e ctx) l EVal)
+                   (braces' $ mkDebug debug ctx True $$ vars)
+                   (braces' $ mkDebug debug ctx False $$ "return None")
     varnames = map (pp . fst) $ exprVarDecls (CtxSetL e ctx) l
     vars = tuple varnames
     vardecls = tuple $ map ("ref" <+>) varnames
@@ -1584,8 +1601,8 @@ mkAssignFilter _ _ e = error $ "Compile.mkAssignFilter: unexpected expression " 
 
 mkCondFilter :: (?d::DatalogProgram, ?rule::Rule, ?rule_idx::Int) => Bool -> ECtx -> Expr -> Doc
 mkCondFilter debug ctx e =
-    mkDebug debug ctx                                               $$
-    "if !" <> mkExpr ctx e EVal <+> "{return None;};"
+    "if !" <> mkExpr ctx e EVal <+> "{" <> mkDebug debug ctx False <> "return None;};" $$
+    mkDebug debug ctx True
 
 -- Generate the ffun field of `XFormArrangement::Join/Semijoin/Aggregate`.
 -- This field is used if input to the operator is an arranged relation.
@@ -1596,9 +1613,12 @@ mkFFun input_filters = do
    open <- openAtom ("*" <> vALUE_VAR) 0 (rhsAtom $ ruleRHS !! 0) ("return false")
    let checks debug = vcat $ punctuate " &&"
                 $ map (\i -> let ctx = CtxRuleRCond ?rule i in
-                             braces' $
-                                mkDebug debug ctx $$
-                                mkExpr ctx (rhsExpr $ ruleRHS !! i) EVal) input_filters
+                             "(if" <+> mkExpr ctx (rhsExpr $ ruleRHS !! i) EVal <+> "{" $$
+                             (nest' $ mkDebug debug ctx True $$ "true")                 $$
+                             "} else {"                                                 $$
+                             (nest' $ mkDebug debug ctx False $$ "false")               $$
+                             "})")
+                      input_filters
    return $ \debug ->
              "Some(&{fn __f(" <> vALUE_VAR <> ": &Value) -> bool"   $$
              (braces' $ open $$ checks debug)                       $$
@@ -1659,7 +1679,7 @@ mkJoin input_filters input_val atom join_idx = do
             "&{fn __f(" <> kEY_VAR <>": &Value," <+> vALUE_VAR1 <> ": &Value," <+>
                       (if is_semi then "_: &()" else vALUE_VAR2 <> ": &Value") <>") -> Option<Value>"     $$
                 (braces' $ open                     $$
-                           mkDebug debug ctx        $$
+                           mkDebug debug ctx True   $$
                            vcat (filters debug)     $$
                            "Some" <> parens ret)                                                          $$
             "    __f}"
@@ -1695,7 +1715,7 @@ mkAntijoin input_filters input_val Atom{..} ajoin_idx = do
         post_ffun True =
             "Some(&{fn __f(" <> kEY_VAR <> ": &Value, " <> vALUE_VAR <> ": &Value) -> bool"        $$
                 (braces' $ post_open                                    $$
-                           mkDebug True ctx                             $$
+                           mkDebug True ctx True                        $$
                            "true")                                      $$
             "    __f})"
     aid <- fromJust <$> getAntijoinArrangement atomRelation arr
