@@ -1415,8 +1415,8 @@ compileRule d rl@Rule{..} last_rhs_idx input_val = {-trace ("compileRule " ++ sh
     -- Generate XFormCollection or XFormArrangement for the 'rhs' operator.
     let mkArrangedOperator conditions inpval =
             case rhs of
-                 RHSLiteral _ True a  -> mkJoin d conditions inpval a rl rhs_idx
-                 RHSLiteral _ False a -> mkAntijoin d conditions inpval a rl rhs_idx
+                 RHSLiteral _ True a _ -> mkJoin d conditions inpval a rl rhs_idx
+                 RHSLiteral _ False a _ -> mkAntijoin d conditions inpval a rl rhs_idx
                  RHSAggregate{}       -> mkAggregate d conditions inpval rl rhs_idx
                  _                    -> error $ "compileRule: operator " ++ show rhs ++ " does not expect arranged input"
     let mkCollectionOperator | rhs_idx == length ruleRHS
@@ -1478,7 +1478,7 @@ compileRule d rl@Rule{..} last_rhs_idx input_val = {-trace ("compileRule " ++ sh
 -- to index the input collection.  The second component lists variables that
 -- will form the value of the arrangement.
 rhsInputArrangement :: DatalogProgram -> Rule -> Int -> RuleRHS -> Maybe ([(Expr, ECtx)], [Field])
-rhsInputArrangement d rl rhs_idx (RHSLiteral _ _ atom) =
+rhsInputArrangement d rl rhs_idx (RHSLiteral _ _ atom _) =
     let ctx = CtxRuleRAtom rl rhs_idx
         (_, vmap) = normalizeArrangement d ctx $ atomVal atom
     in Just $ (map (\(_,e,c) -> (e,c)) vmap,

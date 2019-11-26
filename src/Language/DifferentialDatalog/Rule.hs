@@ -176,10 +176,10 @@ ruleTypeMapM :: (Monad m) => (Type -> m Type) -> Rule -> m Rule
 ruleTypeMapM fun rule@Rule{..} = do
     lhs <- mapM (\(Atom p r v) -> Atom p r <$> exprTypeMapM fun v) ruleLHS
     rhs <- mapM (\rhs -> case rhs of
-                  RHSLiteral p pol (Atom p' r v) -> (RHSLiteral p pol . Atom p' r) <$> exprTypeMapM fun v
-                  RHSCondition p c               -> RHSCondition p <$> exprTypeMapM fun c
-                  RHSAggregate p v g f e         -> RHSAggregate p v g f <$> exprTypeMapM fun e
-                  RHSFlatMap p v e               -> RHSFlatMap p v <$> exprTypeMapM fun e)
+                  RHSLiteral p pol (Atom p' r v) d -> (\v' -> RHSLiteral p pol (Atom p' r v') d) <$> exprTypeMapM fun v
+                  RHSCondition p c                 -> RHSCondition p <$> exprTypeMapM fun c
+                  RHSAggregate p v g f e           -> RHSAggregate p v g f <$> exprTypeMapM fun e
+                  RHSFlatMap p v e                 -> RHSFlatMap p v <$> exprTypeMapM fun e)
                 ruleRHS
     return rule { ruleLHS = lhs, ruleRHS = rhs }
 
