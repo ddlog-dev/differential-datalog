@@ -17,6 +17,7 @@ exprCollectCtx :: (ECtx -> ExprNode b -> b) -> (b -> b -> b) -> ECtx -> Expr -> 
 exprCollect :: (ExprNode b -> b) -> (b -> b -> b) -> Expr -> b
 exprVarOccurrences :: ECtx -> Expr -> [(String, ECtx)]
 exprVars :: Expr -> [String]
+exprFreeVars :: DatalogProgram -> ECtx -> Expr -> [String]
 exprVarDecls :: ECtx -> Expr -> [(String, ECtx)]
 isLVar :: DatalogProgram -> ECtx -> String -> Bool
 exprFuncs :: Expr -> [String]
