@@ -1134,7 +1134,7 @@ createArrangements d = do
 
 createIndexArrangement :: DatalogProgram -> Index -> CompilerMonad ()
 createIndexArrangement d idx@Index{..} = do
-    let marr = arrangeInput d idxAtom
+    let marr = arrangeInput d idxAtom (CtxIndex idx)
                $ map (\f -> (eVar $ name f, error $ "createIndexArrangement " ++ show idx ++ ": " ++ name f ++ " context should not be used")) idxVars
     case marr of
          Nothing -> error $ "createIndexArrangement " ++ show idx ++ ": failed to compute index arrangement."
@@ -1367,7 +1367,7 @@ ruleArrangeFstLiteral d rl@Rule{..} | null ruleRHS = Nothing
     -- If we're at the start of the rule and need to arrange the input relation, generate
     -- arrangement pattern.
     input_arrangement = if all (rhsIsFilterCondition . (ruleRHS !!)) conds
-                           then maybe Nothing (arrangeInput d (rhsAtom $ head ruleRHS) . fst) arrange_input_by
+                           then maybe Nothing (arrangeInput d (rhsAtom $ head ruleRHS) (CtxRuleRAtom rl 0) . fst) arrange_input_by
                            else Nothing
 
 
@@ -1827,7 +1827,7 @@ normalizeArrangement d patctx pat = (renamed, vmap)
              ERef{..}                -> do
                 e' <- rename (CtxRef e ctx) exprPattern
                 return $ E e{exprPattern = e'}
-             _ | exprIsConst (E e)   -> return $ E e
+             _ | exprIsConst d ctx (E e)   -> return $ E e
              _                       -> do
                 vid <- gets fst
                 let vname = "_" ++ show vid
@@ -1863,41 +1863,41 @@ normalizePattern d ctx e =
 --
 -- Step 1: replace each expression in 'arrange_input_by' by '_n' variables
 -- Step 2: eliminate all other variables and patterns that do not constrain the value
-arrangeInput :: DatalogProgram -> Atom -> [(Expr, ECtx)] -> Maybe Expr
-arrangeInput d fstatom arrange_input_by = do
-    fstatom' <- foldIdxM subst (atomVal fstatom) arrange_input_by
+arrangeInput :: DatalogProgram -> Atom -> ECtx -> [(Expr, ECtx)] -> Maybe Expr
+arrangeInput d fstatom atomctx arrange_input_by = do
+    fstatom' <- foldIdxM (subst atomctx) (atomVal fstatom) arrange_input_by
     let vars = map (\i -> "_" ++ show i) [0..length arrange_input_by - 1]
     return $ normalize vars fstatom'
   where
-    subst :: Expr -> (Expr, ECtx) -> Int -> Maybe Expr
-    subst e arrange_by i =
+    subst :: ECtx -> Expr -> (Expr, ECtx) -> Int -> Maybe Expr
+    subst ctx e arrange_by i =
         if exprIsVarOrField $ fst arrange_by
-           then let (e', found) = runState (exprFoldM (\x -> subst' x arrange_by i) e) False
+           then let (e', found) = runState (exprFoldCtxM (\ctx' x -> subst' ctx' x arrange_by i) ctx e) False
                 -- 'found' can only be false here if 'fstatom' contains a binding 'x@expr',
                 -- where both x and some field in 'expr' occur in 'arrange_input_by'.
                 in if found then Just e' else Nothing
            else Nothing
 
-    subst' :: ENode -> (Expr, ECtx) -> Int -> State Bool Expr
-    subst' e@EBinding{..} ab i | exprVar == fieldExprVar (fst ab) = do {put True; return $ substVar ab i}
-                               | otherwise                        = return $ E e
-    subst' e@EVar{..}     ab i | exprVar == fieldExprVar (fst ab) = do {put True; return $ substVar ab i}
-                               | otherwise                        = return $ E e
+    subst' :: ECtx -> ENode -> (Expr, ECtx) -> Int -> State Bool Expr
+    subst' _   e@EBinding{..} ab i | exprVar == fieldExprVar (fst ab) = do {put True; return $ substVar ab i}
+                                   | otherwise                        = return $ E e
+    subst' _   e@EVar{..}     ab i | exprVar == fieldExprVar (fst ab) = do {put True; return $ substVar ab i}
+                                   | otherwise                        = return $ E e
     -- We could just return 'e' unmodified in all other cases, but
     -- we enumerate them explicitly to catch unhandled cases.
-    subst' e@ERef{}     _  _ = return $ E e
-    subst' e@EStruct{}  _  _ = return $ E e
-    subst' e@ETuple{}   _  _ = return $ E e
-    subst' e@EBool{}    _  _ = return $ E e
-    subst' e@EInt{}     _  _ = return $ E e
-    subst' e@EString{}  _  _ = return $ E e
-    subst' e@EBit{}     _  _ = return $ E e
-    subst' e@ESigned{}  _  _ = return $ E e
-    subst' e@EPHolder{} _  _ = return $ E e
-    subst' e@ETyped{}   _  _ = return $ E e
-    subst' e            _  _ | exprIsConst (E e)
-                             = return $ E e
-    subst' e            _  _ = error $ "Unexpected expression " ++ show e ++ " in Compile.arrangeInput.subst'"
+    subst' _   e@ERef{}     _  _ = return $ E e
+    subst' _   e@EStruct{}  _  _ = return $ E e
+    subst' _   e@ETuple{}   _  _ = return $ E e
+    subst' _   e@EBool{}    _  _ = return $ E e
+    subst' _   e@EInt{}     _  _ = return $ E e
+    subst' _   e@EString{}  _  _ = return $ E e
+    subst' _   e@EBit{}     _  _ = return $ E e
+    subst' _   e@ESigned{}  _  _ = return $ E e
+    subst' _   e@EPHolder{} _  _ = return $ E e
+    subst' _   e@ETyped{}   _  _ = return $ E e
+    subst' ctx e            _  _ | exprIsConst d ctx (E e)
+                                 = return $ E e
+    subst' _   e            _  _ = error $ "Unexpected expression " ++ show e ++ " in Compile.arrangeInput.subst'"
 
     fieldExprVar (E EVar{..})   = exprVar
     fieldExprVar (E EField{..}) = fieldExprVar exprStruct
@@ -1953,7 +1953,7 @@ rhsVarsAfter d rl i =
                   if any rhsIsAggregate $ drop (i+1) (ruleRHS rl)
                      then True
                      else elem (name f) $ (map name $ ruleLHSVars d rl) `union`
-                                          (concatMap (ruleRHSTermVars rl) [i+1..length (ruleRHS rl) - 1]))
+                                          (concatMap (ruleRHSTermVars d rl) [i+1..length (ruleRHS rl) - 1]))
            $ ruleRHSVars d rl (i+1)
 
 mkProg :: [ProgNode] -> CompilerMonad Doc

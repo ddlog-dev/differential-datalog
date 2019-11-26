@@ -54,7 +54,8 @@ module Language.DifferentialDatalog.Type(
     gROUP_TYPE,
     rEF_TYPE,
     checkIterable,
-    typeIterType
+    typeIterType,
+    typeValidate
 ) where
 
 import Data.Maybe
@@ -764,3 +765,36 @@ checkIterable :: (MonadError String me, WithType a) => String -> Pos -> DatalogP
 checkIterable prefix p d x =
     check (typeIsIterable d x) p $
           prefix ++ " must have one of these types: " ++ intercalate ", " sET_TYPES ++ ", or " ++ mAP_TYPE ++ " but its type is " ++ show (typ x)
+
+typeValidate :: (MonadError String me) => DatalogProgram -> [String] -> Type -> me ()
+typeValidate _ _     TString{}        = return ()
+typeValidate _ _     TInt{}           = return ()
+typeValidate _ _     TBool{}          = return ()
+typeValidate _ _     (TBit p w)       =
+    check (w>0) p "Integer width must be greater than 0"
+typeValidate _ _     (TSigned p w)       =
+    check (w>0) p "Integer width must be greater than 0"
+typeValidate d tvars (TStruct p cs)   = do
+    uniqNames ("Multiple definitions of constructor " ++) cs
+    mapM_ (consValidate d tvars) cs
+    mapM_ (\grp -> check (length (nub $ map typ grp) == 1) p $
+                          "Field " ++ (name $ head grp) ++ " is declared with different types")
+          $ sortAndGroup name $ concatMap consArgs cs
+typeValidate d tvars (TTuple _ ts)    =
+    mapM_ (typeValidate d tvars) ts
+typeValidate d tvars (TUser p n args) = do
+    t <- checkType p d n
+    let expect = length (tdefArgs t)
+    let actual = length args
+    check (expect == actual) p $
+           "Expected " ++ show expect ++ " type arguments to " ++ n ++ ", found " ++ show actual
+    mapM_ (typeValidate d tvars) args
+    return ()
+typeValidate _ tvars (TVar p v)       =
+    check (elem v tvars) p $ "Unknown type variable " ++ v
+typeValidate _ _     t                = error $ "typeValidate " ++ show t
+
+consValidate :: (MonadError String me) => DatalogProgram -> [String] -> Constructor -> me ()
+consValidate d tvars Constructor{..} = do
+    uniqNames ("Multiple definitions of argument " ++) consArgs
+    mapM_ (typeValidate d tvars . fieldType) $ consArgs
