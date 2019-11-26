@@ -1180,9 +1180,9 @@ createRuleArrangement d rule idx = do
     -- If the literal does not introduce new variables, it's a semijoin
     let is_semi = null $ ruleRHSNewVars d rule idx
     case rhs of
-         RHSLiteral True _ | is_semi   -> addSemijoinArrangement (name rel) arr
-                           | otherwise -> addJoinArrangement (name rel) arr Nothing
-         RHSLiteral False _            -> addAntijoinArrangement (name rel) arr
+         RHSLiteral{rhsPolarity=True}  | is_semi   -> addSemijoinArrangement (name rel) arr
+                                       | otherwise -> addJoinArrangement (name rel) arr Nothing
+         RHSLiteral{rhsPolarity=False} -> addAntijoinArrangement (name rel) arr
          _                             -> return ()
 
 -- Generate Rust struct for ProgNode
@@ -1428,15 +1428,15 @@ compileRule d rl@Rule{..} last_rhs_idx input_val = {-trace ("compileRule " ++ sh
     -- Generate XFormCollection or XFormArrangement for the 'rhs' operator.
     let mkArrangedOperator conditions inpval =
             case rhs of
-                 RHSLiteral True a  -> mkJoin d conditions inpval a rl rhs_idx
-                 RHSLiteral False a -> mkAntijoin d conditions inpval a rl rhs_idx
-                 RHSAggregate{}     -> mkAggregate d conditions inpval rl rhs_idx
-                 _                  -> error $ "compileRule: operator " ++ show rhs ++ " does not expect arranged input"
+                 RHSLiteral _ True a  -> mkJoin d conditions inpval a rl rhs_idx
+                 RHSLiteral _ False a -> mkAntijoin d conditions inpval a rl rhs_idx
+                 RHSAggregate{}       -> mkAggregate d conditions inpval rl rhs_idx
+                 _                    -> error $ "compileRule: operator " ++ show rhs ++ " does not expect arranged input"
     let mkCollectionOperator | rhs_idx == length ruleRHS
                              = mkHead d prefix rl
                              | otherwise =
             case rhs of
-                 RHSFlatMap v e -> mkFlatMap d prefix rl rhs_idx v e
+                 RHSFlatMap _ v e -> mkFlatMap d prefix rl rhs_idx v e
                  _ -> error "compileRule: operator requires arranged input"
 
     -- If: input to the operator is an arranged collection
@@ -1491,13 +1491,13 @@ compileRule d rl@Rule{..} last_rhs_idx input_val = {-trace ("compileRule " ++ sh
 -- to index the input collection.  The second component lists variables that
 -- will form the value of the arrangement.
 rhsInputArrangement :: DatalogProgram -> Rule -> Int -> RuleRHS -> Maybe ([(Expr, ECtx)], [Field])
-rhsInputArrangement d rl rhs_idx (RHSLiteral _ atom) =
+rhsInputArrangement d rl rhs_idx (RHSLiteral _ _ atom) =
     let ctx = CtxRuleRAtom rl rhs_idx
         (_, vmap) = normalizeArrangement d ctx $ atomVal atom
     in Just $ (map (\(_,e,c) -> (e,c)) vmap,
                -- variables visible before join that are still in use after it
                (rhsVarsAfter d rl (rhs_idx - 1)) `intersect` (rhsVarsAfter d rl rhs_idx))
-rhsInputArrangement d rl rhs_idx (RHSAggregate _ vs _ _) =
+rhsInputArrangement d rl rhs_idx (RHSAggregate _ _ vs _ _) =
     let ctx = CtxRuleRAggregate rl rhs_idx
     in Just $ (map (\v -> (eVar v, ctx)) vs,
                -- all visible variables to preserve multiset semantics

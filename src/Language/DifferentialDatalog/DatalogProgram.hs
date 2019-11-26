@@ -1,5 +1,5 @@
 {-
-Copyright (c) 2018 VMware, Inc.
+Copyright (c) 2018-2019 VMware, Inc.
 SPDX-License-Identifier: MIT
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -58,6 +58,7 @@ import qualified Data.GraphViz.Attributes.Complete as GV
 import qualified Data.GraphViz.Printing            as GV
 
 import Language.DifferentialDatalog.Util
+import Language.DifferentialDatalog.Pos
 import Language.DifferentialDatalog.Name
 import Language.DifferentialDatalog.Syntax
 import Language.DifferentialDatalog.Expr
@@ -226,7 +227,7 @@ progDependencyGraph DatalogProgram{..} = G.insEdges (edges ++ apply_edges) g1
     edges = concatMap (\Rule{..} ->
                         concatMap (\a ->
                                     mapMaybe (\case
-                                               RHSLiteral pol a' -> Just (relidx $ atomRelation a', relidx $ atomRelation a, pol)
+                                               RHSLiteral{..} -> Just (relidx $ atomRelation rhsAtom, relidx $ atomRelation a, rhsPolarity)
                                                _ -> Nothing)
                                              ruleRHS)
                                   ruleLHS)
@@ -263,11 +264,13 @@ progMirrorInputRelations d prefix =
                                                  relPrimaryKey = Nothing
                                                })) $ inputRels
     makeRule relName relation = Rule { rulePos = relPos relation,
+                                       ruleAttrs = [],
                                        ruleLHS = [Atom { atomPos = relPos relation,
                                                          atomRelation = prefix ++ relName,
                                                          atomVal = eVar "x"
                                                        }],
-                                       ruleRHS = [RHSLiteral { rhsPolarity = True,
+                                       ruleRHS = [RHSLiteral { rhsPos = nopos,
+                                                               rhsPolarity = True,
                                                                rhsAtom = Atom { atomPos = relPos relation,
                                                                                 atomRelation = relName,
                                                                                 atomVal = eVar "x"
