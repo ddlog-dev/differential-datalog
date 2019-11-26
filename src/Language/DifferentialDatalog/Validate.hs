@@ -321,8 +321,8 @@ ruleValidate :: (MonadError String me) => DatalogProgram -> Rule -> me ()
 ruleValidate d rl@Rule{..} = do
     when (not $ null ruleRHS) $ do
         case head ruleRHS of
-             RHSLiteral True _ -> return ()
-             _                 -> err (pos rl) "Rule must start with positive literal"
+             RHSLiteral{..} | rhsPolarity -> return ()
+             _                            -> err (pos rl) "Rule must start with positive literal"
     mapIdxM_ (ruleRHSValidate d rl) ruleRHS
     mapIdxM_ (ruleLHSValidate d rl) ruleLHS
 
@@ -332,7 +332,7 @@ atomValidate d ctx atom = do
     exprValidate d [] ctx $ atomVal atom
     let vars = ctxAllVars d ctx
     -- variable cannot be declared and used in the same atom
-    uniq' (\_ -> pos atom) fst (\(v,_) -> "Variable " ++ v ++ " is both declared and used inside relational atom " ++ show atom)
+    uniq' (\_ -> pos rhsAtom) fst (\(v,_) -> "Variable " ++ v ++ " is both declared and used inside relational atom " ++ show rhsAtom)
         $ filter (\(var, _) -> isNothing $ find ((==var) . name) vars)
         $ atomVarOccurrences ctx $ atomVal atom
 
@@ -343,10 +343,10 @@ ruleRHSValidate d rl@Rule{..} (RHSLiteral _ atom) idx =
 ruleRHSValidate d rl@Rule{..} (RHSCondition e) idx =
     exprValidate d [] (CtxRuleRCond rl idx) e
 
-ruleRHSValidate d rl@Rule{..} (RHSFlatMap _ e) idx = do
+ruleRHSValidate d rl@Rule{..} RHSFlatMap{..} idx = do
     let ctx = CtxRuleRFlatMap rl idx
-    exprValidate d [] ctx e
-    checkIterable "FlatMap expression" (pos e) d $ exprType d ctx e
+    exprValidate d [] ctx rhsMapExpr
+    checkIterable "FlatMap expression" (pos rhsMapExpr) d $ exprType d ctx rhsMapExpr
 
 ruleRHSValidate d rl RHSAggregate{} idx = do
     _ <- ruleCheckAggregate d rl idx
@@ -369,7 +369,7 @@ ruleLHSValidate d rl a@Atom{..} idx = do
 -- compute concrete types for 'K and 'V
 ruleCheckAggregate :: (MonadError String me) => DatalogProgram -> Rule -> Int -> me (M.Map String Type)
 ruleCheckAggregate d rl idx = do
-    let RHSAggregate v vs fname e = ruleRHS rl !! idx
+    let RHSAggregate _ v vs fname e = ruleRHS rl !! idx
     let ctx = CtxRuleRAggregate rl idx
     exprValidate d [] ctx e
     -- Group-by variables are visible in this scope.

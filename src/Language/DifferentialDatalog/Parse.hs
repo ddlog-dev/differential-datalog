@@ -1,5 +1,5 @@
 {-
-Copyright (c) 2018 VMware, Inc.
+Copyright (c) 2018-2019 VMware, Inc.
 SPDX-License-Identifier: MIT
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -251,10 +251,10 @@ spec = do
          Left e     -> errorWithoutStackTrace e
          Right prog -> return prog
 
-attributes = reservedOp "#" *> (brackets $ many attribute)
-attribute = withPos $ Attribute nopos <$> attrIdent <*> (reservedOp "=" *>  expr)
+attributes = many attribute
+attribute = withPos $ reservedOp "#" *> (brackets $ Attribute nopos <$> attrIdent <*> (option eTrue $ reservedOp "=" *> expr))
 
-decl =  do attrs <- optionMaybe attributes
+decl =  do attrs <- attributes
            items <- (withPosMany $
                          (return . SpImport)         <$> imprt
                      <|> (return . SpType)           <$> typeDef
@@ -266,9 +266,10 @@ decl =  do attrs <- optionMaybe attributes
                      <|> (return . SpApply)          <$> apply)
                    <|> (map SpRule . convertStatement) <$> parseForStatement
            case items of
-                [SpType t] -> return [SpType t{tdefAttrs = maybe [] id attrs}]
+                [SpType t] -> return [SpType t{tdefAttrs = attrs}]
+                [SpRule r] -> return [SpRule r{ruleAttrs = attrs}]
                 _          -> do
-                    when (isJust attrs) $ fail "#-attributes are currently only supported for type declarations"
+                    when (not $ null attrs) $ fail "#-attributes are currently only supported for type declarations and rules"
                     return items
 
 imprt = Import nopos <$ reserved "import" <*> modname <*> (option (ModuleName []) $ reserved "as" *> modname)
@@ -382,21 +383,22 @@ apply = Apply nopos <$  reserved "apply" <*> transIdent
                     <*> (parens $ commaSep (relIdent <|> funcIdent))
                     <*> (reservedOp "->" *> (parens $ commaSep relIdent))
 
-rule = Rule nopos <$>
+rule = Rule nopos [] <$>
        (commaSep1 $ atom True) <*>
        (option [] (reservedOp ":-" *> commaSep rulerhs)) <* dot
 
-rulerhs =  do _ <- try $ lookAhead $ (optional $ reserved "not") *> (optional $ try $ varIdent <* reservedOp "in") *> (optional $ reservedOp "&") *> relIdent *> (symbol "(" <|> symbol "[")
-              RHSLiteral <$> (option True (False <$ reserved "not")) <*> atom False
+rulerhs = withPos $
+           do _ <- try $ lookAhead $ (optional $ reserved "not") *> (optional $ try $ varIdent <* reservedOp "in") *> (optional $ reservedOp "&") *> relIdent *> (symbol "(" <|> symbol "[")
+              RHSLiteral nopos <$> (option True (False <$ reserved "not")) <*> atom False
        <|> do _ <- try $ lookAhead $ reserved "var" *> varIdent *> reservedOp "=" *> reserved "Aggregate"
-              RHSAggregate <$> (reserved "var" *> varIdent) <*>
-                               (reservedOp "=" *> reserved "Aggregate" *> symbol "(" *> (parens $ commaSep varIdent)) <*>
-                               (comma *> funcIdent) <*>
-                               (parens expr <* symbol ")")
+              RHSAggregate nopos <$> (reserved "var" *> varIdent) <*>
+                                     (reservedOp "=" *> reserved "Aggregate" *> symbol "(" *> (parens $ commaSep varIdent)) <*>
+                                     (comma *> funcIdent) <*>
+                                     (parens expr <* symbol ")")
        <|> do _ <- try $ lookAhead $ reserved "var" *> varIdent *> reservedOp "=" *> reserved "FlatMap"
-              RHSFlatMap <$> (reserved "var" *> varIdent) <*>
-                             (reservedOp "=" *> reserved "FlatMap" *> parens expr)
-       <|> (RHSCondition <$> expr)
+              RHSFlatMap nopos <$> (reserved "var" *> varIdent) <*>
+                                   (reservedOp "=" *> reserved "FlatMap" *> parens expr)
+       <|> (RHSCondition nopos <$> expr)
 
 atom is_head = withPos $ do
        p1 <- getPosition

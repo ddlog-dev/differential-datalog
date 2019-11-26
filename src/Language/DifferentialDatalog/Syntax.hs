@@ -1,5 +1,5 @@
 {-
-Copyright (c) 2018 VMware, Inc.
+Copyright (c) 2018-2019 VMware, Inc.
 SPDX-License-Identifier: MIT
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -35,7 +35,6 @@ SOFTWARE.
 
 module Language.DifferentialDatalog.Syntax (
         Attribute(..),
-        ppAttributes,
         Type(..),
         typeTypeVars,
         tBool,
@@ -169,14 +168,10 @@ instance WithName Attribute where
     setName a n = a{attrName = n}
 
 instance PP Attribute where
-    pp (Attribute _ n v) = pp n <+> "=" <+> pp v
+    pp (Attribute _ n v) = "#[" <> pp n <+> "=" <+> pp v <> "]"
 
 instance Show Attribute where
     show = render . pp
-
-ppAttributes :: [Attribute] -> Doc
-ppAttributes [] = empty
-ppAttributes attrs = "#[" <> (commaSep $ map pp attrs) <> "]"
 
 data Field = Field { fieldPos  :: Pos
                    , fieldAttrs:: [Attribute]
@@ -346,13 +341,13 @@ instance WithName TypeDef where
 
 instance PP TypeDef where
     pp TypeDef{..} | isJust tdefType
-                   = ppAttributes tdefAttrs $$
+                   = (vcat $ map pp tdefAttrs) $$
                      ("typedef" <+> pp tdefName <>
                       (if null tdefArgs
                           then empty
                           else "<" <> (hcat $ punctuate comma $ map (("'" <>) . pp) tdefArgs) <> ">") <+>
                       "=" <+> (pp $ fromJust tdefType))
-    pp TypeDef{..} = ppAttributes tdefAttrs $$
+    pp TypeDef{..} = (vcat $ map pp tdefAttrs) $$
                      ("extern type" <+> pp tdefName <>
                       (if null tdefArgs
                           then empty
@@ -543,20 +538,30 @@ instance Show Atom where
 -- positive/negative polarity, Boolean conditions, aggregation and
 -- disaggregation (flatmap) operations.  The last two must occur after
 -- all atoms.
-data RuleRHS = RHSLiteral   {rhsPolarity:: Bool, rhsAtom :: Atom}
-             | RHSCondition {rhsExpr :: Expr}
-             | RHSAggregate {rhsVar :: String, rhsGroupBy :: [String], rhsAggFunc :: String, rhsAggExpr :: Expr}
-             | RHSFlatMap   {rhsVar :: String, rhsMapExpr :: Expr}
-             deriving (Eq)
+data RuleRHS = RHSLiteral   {rhsPos :: Pos, rhsPolarity :: Bool, rhsAtom :: Atom}
+             | RHSCondition {rhsPos :: Pos, rhsExpr :: Expr}
+             | RHSAggregate {rhsPos :: Pos, rhsVar :: String, rhsGroupBy :: [String], rhsAggFunc :: String, rhsAggExpr :: Expr}
+             | RHSFlatMap   {rhsPos :: Pos, rhsVar :: String, rhsMapExpr :: Expr}
+
+instance Eq RuleRHS where
+    (==) (RHSLiteral _ p1 a1)         (RHSLiteral _ p2 a2)          = (p1, a1) == (p2, a2)
+    (==) (RHSCondition _ c1)          (RHSCondition _ c2)           = c1 == c2
+    (==) (RHSAggregate _ v1 g1 a1 e1) (RHSAggregate _ v2 g2 a2 e2)  = (v1, g1, a1, e1) == (v2, g2, a2, e2)
+    (==) (RHSFlatMap _ v1 e1)         (RHSFlatMap _ v2 e2)          = (v1, e1) == (v2, e2)
+    (==) _                            _                             = False
+
+instance WithPos RuleRHS where
+    pos = rhsPos
+    atPos r p = r{rhsPos = p}
 
 instance PP RuleRHS where
-    pp (RHSLiteral True a)    = pp a
-    pp (RHSLiteral False a)   = "not" <+> pp a
-    pp (RHSCondition c)       = pp c
-    pp (RHSAggregate v g f e) = "var" <+> pp v <+> "=" <+> "Aggregate" <> "(" <>
-                                (parens $ vcommaSep $ map pp g) <> comma <+>
-                                pp f <> (parens $ pp e) <> ")"
-    pp (RHSFlatMap v e)       = "var" <+> pp v <+> "=" <+> "FlatMap" <> (parens $ pp e)
+    pp (RHSLiteral _ True a)    = pp a
+    pp (RHSLiteral _ False a)   = "not" <+> pp a
+    pp (RHSCondition _ c)       = pp c
+    pp (RHSAggregate _ v g f e) = "var" <+> pp v <+> "=" <+> "Aggregate" <> "(" <>
+                                  (parens $ vcommaSep $ map pp g) <> comma <+>
+                                  pp f <> (parens $ pp e) <> ")"
+    pp (RHSFlatMap _ v e)       = "var" <+> pp v <+> "=" <+> "FlatMap" <> (parens $ pp e)
 
 instance Show RuleRHS where
     show = render . pp
@@ -582,28 +587,30 @@ rhsIsCondition RHSCondition{} = True
 rhsIsCondition _              = False
 
 rhsIsFilterCondition :: RuleRHS -> Bool
-rhsIsFilterCondition (RHSCondition (E ESet{..})) = False
-rhsIsFilterCondition (RHSCondition _)            = True
-rhsIsFilterCondition _                           = False
+rhsIsFilterCondition (RHSCondition _ (E ESet{..})) = False
+rhsIsFilterCondition RHSCondition{}                = True
+rhsIsFilterCondition _                             = False
 
 rhsIsAssignment :: RuleRHS -> Bool
 rhsIsAssignment rhs = rhsIsCondition rhs && not (rhsIsFilterCondition rhs)
 
-data Rule = Rule { rulePos :: Pos
-                 , ruleLHS :: [Atom]
-                 , ruleRHS :: [RuleRHS]
+data Rule = Rule { rulePos   :: Pos
+                 , ruleAttrs :: [Attribute]
+                 , ruleLHS   :: [Atom]
+                 , ruleRHS   :: [RuleRHS]
                  }
 
 instance Eq Rule where
-    (==) (Rule _ lhs1 rhs1) (Rule _ lhs2 rhs2) =
-        lhs1 == lhs2 && rhs1 == rhs2
+    (==) (Rule _ a1 lhs1 rhs1) (Rule _ a2 lhs2 rhs2) =
+         (a1, lhs1, rhs1) == (a2, lhs2, rhs2)
 
 instance WithPos Rule where
     pos = rulePos
     atPos r p = r{rulePos = p}
 
 instance PP Rule where
-    pp Rule{..} = (vcommaSep $ map pp ruleLHS) <+>
+    pp Rule{..} = (vcat $ map pp ruleAttrs) $$
+                  (vcommaSep $ map pp ruleLHS) <+>
                   (if null ruleRHS
                       then empty
                       else ":-" <+> (commaSep $ map pp ruleRHS)) <> "."

@@ -1,5 +1,5 @@
 {-
-Copyright (c) 2018 VMware, Inc.
+Copyright (c) 2018-2019 VMware, Inc.
 SPDX-License-Identifier: MIT
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -137,32 +137,32 @@ addRhsToRules toAdd rules =
 
 -- | convert statement into rules
 convertStatement :: Statement -> [Rule]
-convertStatement (ForStatement _ atom mc s) =
+convertStatement (ForStatement p atom mc s) =
     let rules = convertStatement s
-        rhs0 = RHSLiteral True atom
-        rhs1 = map RHSCondition $ maybeToList mc in
+        rhs0 = RHSLiteral p True atom
+        rhs1 = map (\c -> RHSCondition (pos c) c) $ maybeToList mc in
     map (\r -> r{ruleRHS=(rhs0 : rhs1 ++ ruleRHS r)}) rules
-convertStatement (IfStatement _ c s Nothing) =
+convertStatement (IfStatement p c s Nothing) =
     let rules = convertStatement s in
-    addRhsToRules (RHSCondition c) rules
-convertStatement (IfStatement _ c s (Just e)) =
+    addRhsToRules (RHSCondition p c) rules
+convertStatement (IfStatement p c s (Just e)) =
     let rules0 = convertStatement s
         rules1 = convertStatement e
-        rules0' = addRhsToRules (RHSCondition c) rules0
-        rules1' = addRhsToRules (RHSCondition $ eNot c) rules1 in
+        rules0' = addRhsToRules (RHSCondition p c) rules0
+        rules1' = addRhsToRules (RHSCondition p $ eNot c) rules1 in
     rules0' ++ rules1'
 convertStatement (MatchStatement _ e c) =
     let rulesList = map (convertStatement . snd) c
         matchList = explodeMatchCases $ map fst c
-        matchExpressions = map (\l -> RHSCondition $ eMatch e l) matchList
+        matchExpressions = map (\(c', l) -> RHSCondition (pos $ fst c') $ E $ EMatch (pos $ fst c') e l) $ zip c matchList
     in concat $ zipWith addRhsToRules matchExpressions rulesList
-convertStatement (AssignStatement _ e s) =
+convertStatement (AssignStatement p e s) =
     let rules = convertStatement s in
-    map (\r -> r{ruleRHS = (RHSCondition e) : (ruleRHS r)}) rules
+    map (\r -> r{ruleRHS = (RHSCondition p e) : (ruleRHS r)}) rules
 convertStatement (BlockStatement _ l) =
     let rulesList = map convertStatement l in
     concat rulesList
 convertStatement (EmptyStatement _) =
     []
 convertStatement (InsertStatement p a) =
-    [Rule p [a] []]
+    [Rule p [] [a] []]

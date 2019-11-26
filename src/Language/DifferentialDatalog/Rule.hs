@@ -24,6 +24,7 @@ SOFTWARE.
 {-# LANGUAGE RecordWildCards, LambdaCase, FlexibleContexts #-}
 
 module Language.DifferentialDatalog.Rule (
+    rULE_ATTR_MULTIWAY,
     rulePPPrefix,
     ruleRHSVars,
     ruleRHSNewVars,
@@ -36,7 +37,8 @@ module Language.DifferentialDatalog.Rule (
     atomVarOccurrences,
     atomVars,
     ruleIsDistinctByConstruction,
-    ruleIsRecursive
+    ruleIsRecursive,
+    ruleIsMultiway
 ) where
 
 import qualified Data.Set as S
@@ -55,6 +57,9 @@ import Language.DifferentialDatalog.Util
 import Language.DifferentialDatalog.NS
 import Language.DifferentialDatalog.Validate
 import Language.DifferentialDatalog.Relation
+
+rULE_ATTR_MULTIWAY :: String
+rULE_ATTR_MULTIWAY = "multiway"
 
 -- | Pretty-print the first 'len' literals of a rule. 
 rulePPPrefix :: Rule -> Int -> Doc
@@ -81,14 +86,14 @@ ruleRHSVarSet' :: DatalogProgram -> Rule -> Int -> S.Set Field
 ruleRHSVarSet' _ _  i | i < 0 = S.empty
 ruleRHSVarSet' d rl i =
     case ruleRHS rl !! i of
-         RHSLiteral True  _            -> vs `S.union` (atomVarDecls d rl i)
-         RHSLiteral False _            -> vs
+         RHSLiteral{..} | rhsPolarity  -> vs `S.union` (atomVarDecls d rl i)
+         RHSLiteral{}                  -> vs
          -- assignment introduces new variables
-         RHSCondition (E e@(ESet _ l _)) -> vs `S.union` exprDecls d (CtxSetL e (CtxRuleRCond rl i)) l
+         RHSCondition _ (E e@(ESet _ l _)) -> vs `S.union` exprDecls d (CtxSetL e (CtxRuleRCond rl i)) l
          -- condition does not introduce new variables
-         RHSCondition _                -> vs
+         RHSCondition{}                -> vs
          -- FlatMap introduces a variable
-         RHSFlatMap v e                -> let t = case exprType' d (CtxRuleRFlatMap rl i) e of
+         RHSFlatMap _ v e              -> let t = case exprType' d (CtxRuleRFlatMap rl i) e of
                                                        TOpaque _ _         [t']    -> t'
                                                        TOpaque _ tname     [kt,vt] | tname == mAP_TYPE
                                                                                    -> tTuple [kt,vt]
@@ -96,13 +101,13 @@ ruleRHSVarSet' d rl i =
                                           in S.insert (Field nopos [] v t) vs
          -- Aggregation hides all variables except groupBy vars
          -- and the aggregate variable
-         RHSAggregate avar gvars fname _ -> let ctx = CtxRuleRAggregate rl i
-                                                gvars' = map (getVar d ctx) gvars
-                                                f = getFunc d fname
-                                                tmap = ruleAggregateTypeParams d rl i
-                                                atype = typeSubstTypeArgs tmap $ funcType f
-                                                avar' = Field nopos [] avar atype
-                                            in S.fromList $ avar':gvars'
+         RHSAggregate _ avar gvars fname _ -> let ctx = CtxRuleRAggregate rl i
+                                                  gvars' = map (getVar d ctx) gvars
+                                                  f = getFunc d fname
+                                                  tmap = ruleAggregateTypeParams d rl i
+                                                  atype = typeSubstTypeArgs tmap $ funcType f
+                                                  avar' = Field nopos [] avar atype
+                                              in S.fromList $ avar':gvars'
     where
     vs = ruleRHSVarSet d rl i
 
@@ -171,10 +176,10 @@ ruleTypeMapM :: (Monad m) => (Type -> m Type) -> Rule -> m Rule
 ruleTypeMapM fun rule@Rule{..} = do
     lhs <- mapM (\(Atom p r v) -> Atom p r <$> exprTypeMapM fun v) ruleLHS
     rhs <- mapM (\rhs -> case rhs of
-                  RHSLiteral pol (Atom p r v) -> (RHSLiteral pol . Atom p r) <$> exprTypeMapM fun v
-                  RHSCondition c              -> RHSCondition <$> exprTypeMapM fun c
-                  RHSAggregate v g f e        -> RHSAggregate v g f <$> exprTypeMapM fun e
-                  RHSFlatMap v e              -> RHSFlatMap v <$> exprTypeMapM fun e)
+                  RHSLiteral p pol (Atom p' r v) -> (RHSLiteral p pol . Atom p' r) <$> exprTypeMapM fun v
+                  RHSCondition p c               -> RHSCondition p <$> exprTypeMapM fun c
+                  RHSAggregate p v g f e         -> RHSAggregate p v g f <$> exprTypeMapM fun e
+                  RHSFlatMap p v e               -> RHSFlatMap p v <$> exprTypeMapM fun e)
                 ruleRHS
     return rule { ruleLHS = lhs, ruleRHS = rhs }
 
@@ -237,3 +242,7 @@ ruleIsRecursive d Rule{..} head_idx =
     any (relsAreMutuallyRecursive d (atomRelation head_atom))
         $ map (atomRelation . rhsAtom)
         $ filter rhsIsLiteral ruleRHS
+
+-- | 'True' iff the rule must be evaluated as a multiway join.
+ruleIsMultiway :: Rule -> Bool
+ruleIsMultiway = any ((== rULE_ATTR_MULTIWAY) . name) . ruleAttrs
