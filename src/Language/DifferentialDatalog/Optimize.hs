@@ -1,5 +1,5 @@
 {-
-Copyright (c) 2018 VMware, Inc.
+Copyright (c) 2018-2019 VMware, Inc.
 SPDX-License-Identifier: MIT
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -81,22 +81,26 @@ expandMultiheadRule d rl ruleidx | ruleHasJoins rl = (Just rel, rule1 : rules)
                    , relPrimaryKey = Nothing
                    }
     -- rule to compute the new relation
-    rule1 = Rule { rulePos = nopos
-                 , ruleLHS = [Atom nopos relname $ eTuple $ map (eVar . name) lhsvars]
-                 , ruleRHS = ruleRHS rl
+    rule1 = Rule { rulePos   = nopos
+                 -- TODO: Some future rule attributes may not need to be copied here.
+                 , ruleAttrs = ruleAttrs rl
+                 , ruleLHS   = [Atom nopos relname $ eTuple $ map (eVar . name) lhsvars]
+                 , ruleRHS   = ruleRHS rl
                  }
     -- rule per head of the original rule
-    rules = map (\atom -> Rule { rulePos = pos rl
-                               , ruleLHS = [atom]
-                               , ruleRHS = [RHSLiteral True 
-                                           $ Atom nopos relname 
-                                           $ eTuple $ map (eVar . name) lhsvars]})
+    rules = map (\atom -> Rule { rulePos   = pos rl
+                               , ruleAttrs = []
+                               , ruleLHS   = [atom]
+                               , ruleRHS   = [RHSLiteral nopos True
+                                              (Atom nopos relname $ eTuple $ map (eVar . name) lhsvars)
+                                             ]})
                 $ ruleLHS rl
 expandMultiheadRule _ rl _ = (Nothing, rules)
     where
-    rules = map (\atom -> Rule { rulePos = pos rl
-                               , ruleLHS = [atom]
-                               , ruleRHS = ruleRHS rl})
+    rules = map (\atom -> Rule { rulePos   = pos rl
+                               , ruleAttrs = ruleAttrs rl
+                               , ruleLHS   = [atom]
+                               , ruleRHS   = ruleRHS rl})
                 $ ruleLHS rl
 
 -- | Common prefix elimination.
@@ -136,8 +140,9 @@ optEliminateCommonPrefixes' d = do
 collectPrefixes :: DatalogProgram -> [(RulePrefix, Int)]
 collectPrefixes d =
     foldl' (\prefs rule -> foldl' (\prefs' pref -> addPrefix pref prefs') 
-                                  prefs $ rulePrefixes rule)
-           [] $ progRules d
+                                  prefs $ rulePrefixes rule) []
+           -- Don't break-up delta-queries.
+           $ filter (not . ruleIsMultiway) $ progRules d
 
 addPrefix :: RulePrefix -> [(RulePrefix, Int)] -> [(RulePrefix, Int)]
 addPrefix p [] = [(p, 1)]
@@ -163,7 +168,7 @@ replacePrefix d pref = {-trace ("replacePrefix " ++ show pref) $-} do
     let relname = "__Prefix_" ++ show idx
     -- variables visible in the rest of the rule 
     -- (manufacture a bogus rule consisting only of the prefix to call ruleRHSVars on it)
-    let vars = ruleRHSVars d (Rule nopos [] pref) pref_len
+    let vars = ruleRHSVars d (Rule nopos [] [] pref) pref_len
     -- relation
     let rel = Relation { relPos        = nopos
                        , relRole       = RelInternal
@@ -176,14 +181,18 @@ replacePrefix d pref = {-trace ("replacePrefix " ++ show pref) $-} do
                     , atomRelation = relname
                     , atomVal      = eTuple $ map (eVar . name) vars
                     }
-    let rule = Rule { rulePos       = nopos
+    let rule = Rule { rulePos      = nopos
+                    -- TODO: at this time we don't know of any rule attributes that
+                    -- must be copied with the prefix.  This may change in the
+                    -- future.
+                    , ruleAttrs    = []
                     , ruleLHS      = [atom]
                     , ruleRHS      = pref
                     }
     -- replace prefix in all rules
     let rules' = map (\rule' -> if isPrefixOf pref $ ruleRHS rule'
-                                  then rule' {ruleRHS = RHSLiteral True atom : (drop pref_len $ ruleRHS rule')}
+                                  then rule' {ruleRHS = RHSLiteral nopos True atom : (drop pref_len $ ruleRHS rule')}
                                   else rule')
-                 $ progRules d
+                 $ filter (not . ruleIsMultiway) $ progRules d
     return d{ progRules = rule:rules'
             , progRelations = M.insert relname rel $ progRelations d}
