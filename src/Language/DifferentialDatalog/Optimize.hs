@@ -93,7 +93,7 @@ expandMultiheadRule d rl ruleidx = (Just rel, rule1 : rules)
                                , ruleLHS   = [atom]
                                , ruleRHS   = [RHSLiteral nopos True
                                               (Atom nopos relname $ eTuple $ map (eVar . name) lhsvars)
-                                             ]})
+                                              False]})
                 $ ruleLHS rl
 
 -- | Common prefix elimination.
@@ -184,7 +184,7 @@ replacePrefix d pref = {-trace ("replacePrefix " ++ show pref) $-} do
                     }
     -- replace prefix in all rules
     let rules' = map (\rule' -> if isPrefixOf pref $ ruleRHS rule'
-                                  then rule' {ruleRHS = RHSLiteral nopos True atom : (drop pref_len $ ruleRHS rule')}
+                                  then rule' {ruleRHS = RHSLiteral nopos True atom False : (drop pref_len $ ruleRHS rule')}
                                   else rule')
                  $ filter (not . ruleIsMultiway) $ progRules d
     return d{ progRules = rule:rules'
