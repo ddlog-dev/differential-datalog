@@ -55,7 +55,8 @@ module Language.DifferentialDatalog.Type(
     gROUP_TYPE,
     rEF_TYPE,
     checkIterable,
-    typeIterType
+    typeIterType,
+    typeValidate
 ) where
 
 import Data.Maybe
@@ -775,3 +776,62 @@ checkIterable :: (MonadError String me, WithType a) => String -> Pos -> DatalogP
 checkIterable prefix p d x =
     check (typeIsIterable d x) p $
           prefix ++ " must have one of these types: " ++ intercalate ", " sET_TYPES ++ ", or " ++ mAP_TYPE ++ " but its type is " ++ show (typ x)
+
+typeValidate :: (MonadError String me) => DatalogProgram -> [String] -> Type -> me ()
+typeValidate _ _     TString{}        = return ()
+typeValidate _ _     TInt{}           = return ()
+typeValidate _ _     TBool{}          = return ()
+typeValidate _ _     (TBit p w)       =
+    check (w>0) p "Integer width must be greater than 0"
+typeValidate _ _     (TSigned p w)       =
+    check (w>0) p "Integer width must be greater than 0"
+typeValidate d tvars struct@(TStruct p cs)   = do
+    uniqNames ("Multiple definitions of constructor " ++) cs
+    mapM_ (consValidate d tvars struct) cs
+    mapM_ (\grp -> check (length (nub $ map typ grp) == 1) p $
+                          "Field " ++ (name $ head grp) ++ " is declared with different types")
+          $ sortAndGroup name $ concatMap consArgs cs
+typeValidate d tvars (TTuple _ ts)    =
+    mapM_ (typeValidate d tvars) ts
+typeValidate d tvars (TUser p n args) = do
+    t <- checkType p d n
+    let expect = length (tdefArgs t)
+    let actual = length args
+    check (expect == actual) p $
+           "Expected " ++ show expect ++ " type arguments to " ++ n ++ ", found " ++ show actual
+    mapM_ (typeValidate d tvars) args
+    return ()
+typeValidate _ tvars (TVar p v)       =
+    check (elem v tvars) p $ "Unknown type variable " ++ v
+typeValidate _ _     t                = error $ "typeValidate " ++ show t
+
+consValidate :: (MonadError String me) => DatalogProgram -> [String] -> Type -> Constructor -> me ()
+consValidate d tvars struct cons@Constructor{..} = do
+    mapM_ (consValidateAttr d struct cons) consAttrs
+    _ <- checkRustAttrs consAttrs
+    fieldsValidate d tvars consArgs
+
+consValidateAttr :: (MonadError String me) => DatalogProgram -> Type -> Constructor -> Attribute -> me ()
+consValidateAttr _ struct Constructor{..} attr = do
+    let TStruct{..} = struct
+    case name attr of
+         "rust" -> check (length typeCons > 1) (pos attr) $ "Per-constructor 'rust' attributes are only supported for types with multiple constructors"
+         n -> err (pos attr) $ "Unknown attribute " ++ n
+
+fieldsValidate :: (MonadError String me) => DatalogProgram -> [String] -> [Field] -> me ()
+fieldsValidate d targs fields = do
+    uniqNames ("Multiple definitions of argument " ++) fields
+    mapM_ (fieldValidate d targs) fields
+
+fieldValidate :: (MonadError String me) => DatalogProgram -> [String] -> Field -> me ()
+fieldValidate d targs field@Field{..} = do
+    typeValidate d targs $ typ field
+    mapM_ (fieldValidateAttr d) fieldAttrs
+    _ <- checkRustAttrs fieldAttrs
+    return ()
+
+fieldValidateAttr :: (MonadError String me) => DatalogProgram -> Attribute -> me ()
+fieldValidateAttr _ attr = do
+    case name attr of
+         "rust" -> return ()
+         n -> err (pos attr) $ "Unknown attribute " ++ n

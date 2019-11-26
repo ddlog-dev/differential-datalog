@@ -21,7 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 -}
 
-{-# LANGUAGE TupleSections, LambdaCase, RecordWildCards #-}
+{-# LANGUAGE TupleSections, LambdaCase, RecordWildCards, FlexibleContexts #-}
 
 {- | 
 Module     : Index
@@ -30,16 +30,23 @@ Description: Helper functions for manipulating Indexes.
 module Language.DifferentialDatalog.Index (
     idxIdentifier,
     idxRelation,
-    idxKeyType
+    idxKeyType,
+    indexValidate
 ) 
 where
 
 import qualified Data.Map as M
+import Data.List
+import Control.Monad.Except
 
 import Language.DifferentialDatalog.Name
+import Language.DifferentialDatalog.Util
+import Language.DifferentialDatalog.Pos
 import Language.DifferentialDatalog.Syntax
 import Language.DifferentialDatalog.NS
 import Language.DifferentialDatalog.Type
+import Language.DifferentialDatalog.Rule
+import Language.DifferentialDatalog.Expr
 
 -- | Unique id, assigned to the index
 idxIdentifier :: DatalogProgram -> Index -> Int
@@ -50,3 +57,21 @@ idxRelation d idx = getRelation d $ atomRelation $ idxAtom idx
 
 idxKeyType :: Index -> Type
 idxKeyType = tTuple . map typ . idxVars
+
+indexValidate :: (MonadError String me) => DatalogProgram -> Index -> me ()
+indexValidate d idx@Index{..} = do
+    uniqNames ("Multiple definitions of argument " ++) idxVars
+    mapM_ (typeValidate d [] . typ) idxVars
+    atomValidate d (CtxIndex idx) idxAtom
+    check (exprIsPatternImpl $ atomVal idxAtom) (pos idxAtom)
+          $ "Index expression is not a pattern"
+    -- Atom is defined over exactly the variables in the index.
+    -- (variables in 'atom_vars \\ idx_vars' should be caught by 'atomValidate'
+    -- above, so we only need to check for 'idx_vars \\ atom_vars' here).
+    let idx_vars = map name idxVars
+    let atom_vars = exprFreeVars d (CtxIndex idx) (atomVal idxAtom)
+    check (null $ idx_vars \\ atom_vars) (pos idx)
+          $ "The following index variables are not constrained by the index pattern: " ++
+            (show $ idx_vars \\ atom_vars)
+
+

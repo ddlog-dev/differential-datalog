@@ -1,5 +1,5 @@
 {-
-Copyright (c) 2018 VMware, Inc.
+Copyright (c) 2018-2019 VMware, Inc.
 SPDX-License-Identifier: MIT
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -24,8 +24,7 @@ SOFTWARE.
 {-# LANGUAGE RecordWildCards, FlexibleContexts, LambdaCase, TupleSections #-}
 
 module Language.DifferentialDatalog.Validate (
-    validate,
-    ruleCheckAggregate) where
+    validate) where
 
 import qualified Data.Map as M
 import Control.Monad.Except
@@ -42,10 +41,10 @@ import Language.DifferentialDatalog.Pos
 import Language.DifferentialDatalog.Name
 import Language.DifferentialDatalog.Type
 import Language.DifferentialDatalog.Ops
-import Language.DifferentialDatalog.ECtx
 import Language.DifferentialDatalog.Expr
 import Language.DifferentialDatalog.DatalogProgram
-import {-# SOURCE #-} Language.DifferentialDatalog.Rule
+import Language.DifferentialDatalog.Rule
+import Language.DifferentialDatalog.Index
 import Language.DifferentialDatalog.Relation
 import Language.DifferentialDatalog.Module
 
@@ -182,65 +181,6 @@ typedefValidateAttr _ TypeDef{..} attr = do
                 $ "Extern types cannot have a \"rust\" attribute"
          n -> err (pos attr) $ "Unknown attribute " ++ n
 
-typeValidate :: (MonadError String me) => DatalogProgram -> [String] -> Type -> me ()
-typeValidate _ _     TString{}        = return ()
-typeValidate _ _     TInt{}           = return ()
-typeValidate _ _     TBool{}          = return ()
-typeValidate _ _     (TBit p w)       =
-    check (w>0) p "Integer width must be greater than 0"
-typeValidate _ _     (TSigned p w)       =
-    check (w>0) p "Integer width must be greater than 0"
-typeValidate d tvars struct@(TStruct p cs)   = do
-    uniqNames ("Multiple definitions of constructor " ++) cs
-    mapM_ (consValidate d tvars struct) cs
-    mapM_ (\grp -> check (length (nub $ map typ grp) == 1) p $
-                          "Field " ++ (name $ head grp) ++ " is declared with different types")
-          $ sortAndGroup name $ concatMap consArgs cs
-typeValidate d tvars (TTuple _ ts)    =
-    mapM_ (typeValidate d tvars) ts
-typeValidate d tvars (TUser p n args) = do
-    t <- checkType p d n
-    let expect = length (tdefArgs t)
-    let actual = length args
-    check (expect == actual) p $
-           "Expected " ++ show expect ++ " type arguments to " ++ n ++ ", found " ++ show actual
-    mapM_ (typeValidate d tvars) args
-    return ()
-typeValidate _ tvars (TVar p v)       =
-    check (elem v tvars) p $ "Unknown type variable " ++ v
-typeValidate _ _     t                = error $ "typeValidate " ++ show t
-
-consValidate :: (MonadError String me) => DatalogProgram -> [String] -> Type -> Constructor -> me ()
-consValidate d tvars struct cons@Constructor{..} = do
-    mapM_ (consValidateAttr d struct cons) consAttrs
-    _ <- checkRustAttrs consAttrs
-    fieldsValidate d tvars consArgs
-
-consValidateAttr :: (MonadError String me) => DatalogProgram -> Type -> Constructor -> Attribute -> me ()
-consValidateAttr _ struct Constructor{..} attr = do
-    let TStruct{..} = struct
-    case name attr of
-         "rust" -> check (length typeCons > 1) (pos attr) $ "Per-constructor 'rust' attributes are only supported for types with multiple constructors"
-         n -> err (pos attr) $ "Unknown attribute " ++ n
-
-fieldsValidate :: (MonadError String me) => DatalogProgram -> [String] -> [Field] -> me ()
-fieldsValidate d targs fields = do
-    uniqNames ("Multiple definitions of argument " ++) fields
-    mapM_ (fieldValidate d targs) fields
-
-fieldValidate :: (MonadError String me) => DatalogProgram -> [String] -> Field -> me ()
-fieldValidate d targs field@Field{..} = do
-    typeValidate d targs $ typ field
-    mapM_ (fieldValidateAttr d) fieldAttrs
-    _ <- checkRustAttrs fieldAttrs
-    return ()
-
-fieldValidateAttr :: (MonadError String me) => DatalogProgram -> Attribute -> me ()
-fieldValidateAttr _ attr = do
-    case name attr of
-         "rust" -> return ()
-         n -> err (pos attr) $ "Unknown attribute " ++ n
-
 checkAcyclicTypes :: (MonadError String me) => DatalogProgram -> me ()
 checkAcyclicTypes DatalogProgram{..} = do
     let g0 :: G.Gr String ()
@@ -301,86 +241,6 @@ relValidate d rel@Relation{..} = do
 --                     $ "Dependency cycle among types used in relation " ++ name rel ++ ":\n" ++
 --                      (intercalate "\n" $ map (show . snd) cyc))
 --          $ grCycle $ typeGraph r types
-
-indexValidate :: (MonadError String me) => DatalogProgram -> Index -> me ()
-indexValidate d idx@Index{..} = do
-    fieldsValidate d [] idxVars
-    atomValidate d (CtxIndex idx) idxAtom
-    check (exprIsPatternImpl $ atomVal idxAtom) (pos idxAtom)
-          $ "Index expression is not a pattern"
-    -- Atom is defined over exactly the variables in the index.
-    -- (variables in 'atom_vars \\ idx_vars' should be caught by 'atomValidate'
-    -- above, so we only need to check for 'idx_vars \\ atom_vars' here).
-    let idx_vars = map name idxVars
-    let atom_vars = exprFreeVars d (CtxIndex idx) (atomVal idxAtom)
-    check (null $ idx_vars \\ atom_vars) (pos idx)
-          $ "The following index variables are not constrained by the index pattern: " ++
-            (show $ idx_vars \\ atom_vars)
-
-ruleValidate :: (MonadError String me) => DatalogProgram -> Rule -> me ()
-ruleValidate d rl@Rule{..} = do
-    when (not $ null ruleRHS) $ do
-        case head ruleRHS of
-             RHSLiteral{..} | rhsPolarity -> return ()
-             _                            -> err (pos rl) "Rule must start with positive literal"
-    mapIdxM_ (ruleRHSValidate d rl) ruleRHS
-    mapIdxM_ (ruleLHSValidate d rl) ruleLHS
-
-atomValidate :: (MonadError String me) => DatalogProgram -> ECtx -> Atom -> me ()
-atomValidate d ctx atom = do
-    _ <- checkRelation (pos atom) d $ atomRelation atom
-    exprValidate d [] ctx $ atomVal atom
-    let vars = ctxAllVars d ctx
-    -- variable cannot be declared and used in the same atom
-    uniq' (\_ -> pos rhsAtom) fst (\(v,_) -> "Variable " ++ v ++ " is both declared and used inside relational atom " ++ show rhsAtom)
-        $ filter (\(var, _) -> isNothing $ find ((==var) . name) vars)
-        $ atomVarOccurrences ctx $ atomVal atom
-
-ruleRHSValidate :: (MonadError String me) => DatalogProgram -> Rule -> RuleRHS -> Int -> me ()
-ruleRHSValidate d rl@Rule{..} (RHSLiteral _ atom) idx =
-    atomValidate d (CtxRuleRAtom rl idx) atom
-
-ruleRHSValidate d rl@Rule{..} (RHSCondition e) idx =
-    exprValidate d [] (CtxRuleRCond rl idx) e
-
-ruleRHSValidate d rl@Rule{..} RHSFlatMap{..} idx = do
-    let ctx = CtxRuleRFlatMap rl idx
-    exprValidate d [] ctx rhsMapExpr
-    checkIterable "FlatMap expression" (pos rhsMapExpr) d $ exprType d ctx rhsMapExpr
-
-ruleRHSValidate d rl RHSAggregate{} idx = do
-    _ <- ruleCheckAggregate d rl idx
-    return ()
-
-ruleLHSValidate :: (MonadError String me) => DatalogProgram -> Rule -> Atom -> Int -> me ()
-ruleLHSValidate d rl a@Atom{..} idx = do
-    rel <- checkRelation atomPos d atomRelation
-    when (relRole rel == RelInput) $ check (null $ ruleRHS rl) (pos a)
-         $ "Input relation " ++ name rel ++ " cannot appear in the head of a rule"
-    exprValidate d [] (CtxRuleL rl idx) atomVal
-
--- Validate Aggregate term, compute type argument map for the aggregate function used in the term.
--- e.g., given an aggregate function:
--- extern function group2map(g: Group<('K,'V)>): Map<'K,'V>
---
--- and its invocation:
--- Aggregate4(x, map) :- AggregateMe1(x,y), Aggregate((x), map = group2map((x,y)))
---
--- compute concrete types for 'K and 'V
-ruleCheckAggregate :: (MonadError String me) => DatalogProgram -> Rule -> Int -> me (M.Map String Type)
-ruleCheckAggregate d rl idx = do
-    let RHSAggregate _ v vs fname e = ruleRHS rl !! idx
-    let ctx = CtxRuleRAggregate rl idx
-    exprValidate d [] ctx e
-    -- Group-by variables are visible in this scope.
-    mapM_ (checkVar (pos e) d ctx) vs
-    let group_by_types = map (typ . getVar d ctx) vs
-    check (notElem v vs) (pos e) $ "Aggregate variable " ++ v ++ " already declared in this scope"
-    -- Aggregation function exists and takes a group as its sole argument.
-    f <- checkFunc (pos e) d fname
-    check (length (funcArgs f) == 1) (pos e) $ "Aggregation function must take one argument, but " ++
-                                               fname ++ " takes " ++ (show $ length $ funcArgs f) ++ " arguments"
-    funcTypeArgSubsts d (pos e) f [tOpaque gROUP_TYPE [tTuple group_by_types, exprType d ctx e]]
 
 -- | Validate relation transformer
 -- * input and output argument names must be unique
@@ -522,200 +382,6 @@ depGraphValidate d@DatalogProgram{..} = do
                                                  (show scc)
                         _ -> return ())
           $ filter ((> 1) . length) sccs
-
-exprValidate :: (MonadError String me) => DatalogProgram -> [String] -> ECtx -> Expr -> me ()
-exprValidate d tvars ctx e = {-trace ("exprValidate " ++ show e ++ " in \n" ++ show ctx) $ -} do
-    exprTraverseCtxM (exprValidate1 d tvars) ctx e
-    exprTraverseTypeME d (exprValidate2 d) ctx e
-    exprTraverseCtxM (exprCheckMatchPatterns d) ctx e
-
--- This function does not perform type checking: just checks that all functions and
--- variables are defined; the number of arguments matches declarations, etc.
-exprValidate1 :: (MonadError String me) => DatalogProgram -> [String] -> ECtx -> ExprNode Expr -> me ()
-exprValidate1 _ _ ctx EVar{..} | ctxInRuleRHSPositivePattern ctx
-                                          = return ()
-exprValidate1 d _ ctx (EVar p v)          = do _ <- checkVar p d ctx v
-                                               return ()
-exprValidate1 d _ ctx (EApply p f as)     = do
-    fun <- checkFunc p d f
-    check (length as == length (funcArgs fun)) p
-          "Number of arguments does not match function declaration"
-    mapM_ (\(a, mut) -> when mut $ checkLExpr d ctx a)
-          $ zip as (map argMut $ funcArgs fun)
-exprValidate1 _ _ _   EField{}            = return ()
-exprValidate1 _ _ _   ETupField{}         = return ()
-exprValidate1 _ _ _   EBool{}             = return ()
-exprValidate1 _ _ _   EInt{}              = return ()
-exprValidate1 _ _ _   EString{}           = return ()
-exprValidate1 _ _ _   EBit{}              = return ()
-exprValidate1 _ _ _   ESigned{}           = return ()
-exprValidate1 d _ ctx (EStruct p c _)     = do -- initial validation was performed by exprDesugar
-    let tdef = consType d c
-    case find ctxIsSetL $ ctxAncestors ctx of
-         Nothing -> return ()
-         Just ctx' -> when (not $ ctxIsRuleRCond $ ctxParent ctx') $ do
-            check ((length $ typeCons $ fromJust $ tdefType tdef) == 1) p
-                   $ "Type constructor in the left-hand side of an assignment is only allowed for types with one constructor, \
-                     \ but \"" ++ name tdef ++ "\" has multiple constructors"
-exprValidate1 _ _ _   ETuple{}            = return ()
-exprValidate1 _ _ _   ESlice{}            = return ()
-exprValidate1 _ _ _   EMatch{}            = return ()
-exprValidate1 d _ ctx (EVarDecl p v)      = do
-    check (ctxInSetL ctx || ctxInMatchPat ctx) p "Variable declaration is not allowed in this context"
-    checkNoVar p d ctx v
-{-                                     | otherwise
-                                          = do checkNoVar p d ctx v
-                                               check (ctxIsTyped ctx) p "Variable declared without a type"
-                                               check (ctxIsSeq1 $ ctxParent ctx) p
-                                                      "Variable declaration is not allowed in this context"-}
-exprValidate1 _ _ _   ESeq{}              = return ()
-exprValidate1 _ _ _   EITE{}              = return ()
-exprValidate1 d _ ctx EFor{..}            = checkNoVar exprPos d ctx exprLoopVar
-exprValidate1 d _ ctx (ESet _ l _)        = checkLExpr d ctx l
-exprValidate1 _ _ ctx (EContinue p)       = check (ctxInForLoopBody ctx) p "\"continue\" outside of a loop"
-exprValidate1 _ _ ctx (EBreak p)          = check (ctxInForLoopBody ctx) p "\"break\" outside of a loop"
-exprValidate1 _ _ ctx (EReturn p _)       = check (isJust $ ctxInFunc ctx) p "\"return\" outside of a function body"
-exprValidate1 _ _ _   EBinOp{}            = return ()
-exprValidate1 _ _ _   EUnOp{}             = return ()
-
-exprValidate1 _ _ ctx (EPHolder p)        = do
-    let msg = case ctx of
-                   CtxStruct EStruct{..} _ f -> "Missing field '" ++ f ++ "' in constructor " ++ exprConstructor
-                   _               -> "_ is not allowed in this context"
-    check (ctxPHolderAllowed ctx) p msg
-exprValidate1 d _ ctx (EBinding p v _)    = do
-    checkNoVar p d ctx v
-
-exprValidate1 d tvs _ (ETyped _ _ t)      = typeValidate d tvs t
-exprValidate1 d tvs _ (EAs _ _ t)         = typeValidate d tvs t
-exprValidate1 _ _ ctx (ERef p _)          =
-    -- Rust does not allow pattern matching inside 'Arc'
-    check (ctxInRuleRHSPattern ctx || ctxInIndex ctx) p "Dereference pattern not allowed in this context"
-
--- True if a placeholder ("_") can appear in this context
-ctxPHolderAllowed :: ECtx -> Bool
-ctxPHolderAllowed ctx =
-    case ctx of
-         CtxSetL{}        -> True
-         CtxTyped{}       -> pres
-         CtxRuleRAtom{}   -> True
-         CtxStruct{}      -> pres
-         CtxTuple{}       -> pres
-         CtxMatchPat{}    -> True
-         CtxBinding{}     -> True
-         CtxRef{}         -> True
-         CtxIndex{}       -> True
-         _                -> False
-    where
-    par = ctxParent ctx
-    pres = ctxPHolderAllowed par
-
-checkNoVar :: (MonadError String me) => Pos -> DatalogProgram -> ECtx -> String -> me ()
-checkNoVar p d ctx v = check (isNothing $ lookupVar d ctx v) p
-                              $ "Variable " ++ v ++ " already defined in this scope"
-
--- Traverse again with types.  This pass ensures that all sub-expressions
--- have well-defined types that match their context
-exprTraverseTypeME :: (MonadError String me) => DatalogProgram -> (ECtx -> ExprNode Type -> me ()) -> ECtx -> Expr -> me ()
-exprTraverseTypeME d = exprTraverseCtxWithM (\ctx e -> do
-    --trace ("exprTraverseTypeME " ++ show ctx ++ "\n    " ++ show e) $ return ()
-    t <- exprNodeType d ctx e
-    case ctxExpectType d ctx of
-         Nothing -> return ()
-         Just t' -> check (typesMatch d t t') (pos e)
-                          $ "Couldn't match expected type " ++ show t' ++ " with actual type " ++ show t ++ " (context: " ++ show ctx ++ ")"
-    return t)
-
-
-
-exprValidate2 :: (MonadError String me) => DatalogProgram -> ECtx -> ExprNode Type -> me ()
-exprValidate2 d _   (ESlice p e h l)    =
-    case typ' d e of
-        TBit _ w -> do check (h >= l) p
-                           $ "Upper bound of the slice must be greater than lower bound"
-                       check (h < w) p
-                           $ "Upper bound of the slice cannot exceed argument width"
-        _        -> err (pos e) $ "Expression is not a bit vector"
-
-exprValidate2 d _   (EMatch _ _ cs)     = do
-    let t = snd $ head cs
-    mapM_ ((\e -> checkTypesMatch (pos e) d t e) . snd) cs
-
-exprValidate2 d _   (EBinOp p op e1 e2) = do
-    case op of
-        Eq     -> m
-        Neq    -> m
-        Lt     -> m -- support comparisons for all datatypes
-        Gt     -> m
-        Lte    -> m
-        Gte    -> m
-        And    -> do {m; isbool}
-        Or     -> do {m; isbool}
-        Impl   -> do {m; isbool}
-        Plus   -> do {m; isint1}
-        Minus  -> do {m; isint1}
-        ShiftR -> do isint1
-        ShiftL -> do isint1
-        Mod    -> do {m; isint1; isint2}
-        Times  -> do {m; isint1; isint2}
-        Div    -> do {m; isint1; isint2}
-        BAnd   -> do {m; isbitOrSigned1}
-        BOr    -> do {m; isbitOrSigned1}
-        BXor   -> do {m; isbitOrSigned1}
-        Concat | isString d e1
-               -> return ()
-        Concat -> do {isbit1; isbit2}
-    where m = checkTypesMatch p d e1 e2
-          isint1 = check (isInt d e1 || isBit d e1 || isSigned d e1) (pos e1) "Not an integer"
-          isint2 = check (isInt d e2 || isBit d e2 || isSigned d e2) (pos e2) "Not an integer"
-          isbit1 = check (isBit d e1) (pos e1) "Not a bit vector"
-          isbitOrSigned1 = check (isBit d e1 || isSigned d e1) (pos e1) "Not a bit<> or signed<> value"
-          isbit2 = check (isBit d e2) (pos e2) "Not a bit vector"
-          isbool = check (isBool d e1) (pos e1) "Not a Boolean"
-
-exprValidate2 d _   (EUnOp _ BNeg e)    =
-    check (isBit d e || isSigned d e) (pos e) "Not a bit vector"
-exprValidate2 d _   (EUnOp _ UMinus e)    =
-    check (isSigned d e || isInt d e) (pos e)
-        $ "Cannot negate expression of type " ++ show e ++ ". Negation applies to signed<> and bigint values only."
---exprValidate2 d ctx (EVarDecl p x)      = check (isJust $ ctxExpectType d ctx) p
---                                                 $ "Cannot determine type of variable " ++ x -- Context: " ++ show ctx
-exprValidate2 d _   (EITE p _ t e)       = checkTypesMatch p d t e
-exprValidate2 d _   (EFor p _ i _)       = checkIterable "iterator" p d i
-exprValidate2 d _   (EAs p e t)          = do
-    check (isBit d e || isSigned d e) p
-        $ "Cannot type-cast expression of type " ++ show e ++ ".  The type-cast operator is only supported for bit<> and signed<> types."
-    check (isBit d t || isSigned d t || isInt d t) p
-        $ "Cannot type-cast expression to " ++ show t ++ ".  Only bit<>, signed<>, and bigint types can be cast to."
-    when (not $ isInt d t) $
-        check (isBit d e == isBit d t || typeWidth e' == typeWidth t') p $
-            "Conversion between signed and unsigned bit vectors only supported across types of the same bit width. " ++
-            "Try casting to " ++ show (t'{typeWidth = typeWidth e'}) ++ " first."
-    where
-    e' = typ' d e
-    t' = typ' d t
-exprValidate2 _ _   _                    = return ()
-
-checkLExpr :: (MonadError String me) => DatalogProgram -> ECtx -> Expr -> me ()
-checkLExpr d ctx e | ctxIsRuleRCond ctx =
-    check (exprIsPattern e) (pos e)
-        $ "Left-hand side of an assignment term can only contain variable declarations, type constructors, and tuples"
-                   | otherwise =
-    check (exprIsVarOrFieldLVal d ctx e || exprIsDeconstruct d e) (pos e)
-        $ "Expression " ++ show e ++ " is not an l-value" -- in context " ++ show ctx
-
-exprCheckMatchPatterns :: (MonadError String me) => DatalogProgram -> ECtx -> ExprNode Expr -> me ()
-exprCheckMatchPatterns d ctx e@(EMatch _ x cs) = do
-    let t = exprType d (CtxMatchExpr e ctx) x
-        ct0 = typeConsTree t
-    ct <- foldM (\ct pat -> do let (leftover, abducted) = consTreeAbduct d ct pat
-                               check (not $ consTreeEmpty abducted) (pos pat)
-                                      "Unsatisfiable match pattern"
-                               return leftover)
-                ct0 (map fst cs)
-    check (consTreeEmpty ct) (pos x) "Non-exhaustive match patterns"
-
-exprCheckMatchPatterns _ _   _               = return ()
 
 -- Automatically insert string conversion functions in the Concat
 -- operator:  '"x:" ++ x', where 'x' is of type int becomes
