@@ -71,6 +71,8 @@ validate d = do
     mapM_ (funcValidateDefinition d') $ M.elems $ progFunctions d'
     -- Validate relation declarations
     mapM_ (relValidate d') $ M.elems $ progRelations d'
+    -- Validate indexes
+    mapM_ (indexValidate d') $ M.elems $ progIndexes d'
     -- Validate rules
     mapM_ (ruleValidate d') $ progRules d'
     -- Validate transformers
@@ -269,6 +271,22 @@ relValidate d rel@Relation{..} = do
 --                      (intercalate "\n" $ map (show . snd) cyc))
 --          $ grCycle $ typeGraph r types
 
+indexValidate :: (MonadError String me) => DatalogProgram -> Index -> me ()
+indexValidate d idx@Index{..} = do
+    uniqNames ("Multiple definitions of argument " ++) idxVars
+    mapM_ (typeValidate d [] . typ) idxVars
+    atomValidate d (CtxIndex idx) idxAtom
+    check (exprIsPatternImpl $ atomVal idxAtom) (pos idxAtom)
+          $ "Index expression is not a pattern"
+    -- Atom is defined over exactly the variables in the index.
+    -- (variables in 'atom_vars \\ idx_vars' should be caught by 'atomValidate'
+    -- above, so we only need to check for 'idx_vars \\ atom_vars' here).
+    let idx_vars = map name idxVars
+    let atom_vars = exprFreeVars d (CtxIndex idx) (atomVal idxAtom)
+    check (null $ idx_vars \\ atom_vars) (pos idx)
+          $ "The following index variables are not constrained by the index pattern: " ++
+            (show $ idx_vars \\ atom_vars)
+
 ruleValidate :: (MonadError String me) => DatalogProgram -> Rule -> me ()
 ruleValidate d rl@Rule{..} = do
     when (not $ null ruleRHS) $ do
@@ -278,17 +296,21 @@ ruleValidate d rl@Rule{..} = do
     mapIdxM_ (ruleRHSValidate d rl) ruleRHS
     mapIdxM_ (ruleLHSValidate d rl) ruleLHS
 
-ruleRHSValidate :: (MonadError String me) => DatalogProgram -> Rule -> RuleRHS -> Int -> me ()
-ruleRHSValidate d rl@Rule{..} (RHSLiteral _ atom) idx = do
+atomValidate :: (MonadError String me) => DatalogProgram -> ECtx -> Atom -> me ()
+atomValidate d ctx atom = do
     _ <- checkRelation (pos atom) d $ atomRelation atom
-    exprValidate d [] (CtxRuleRAtom rl idx) $ atomVal atom
-    let vars = ruleRHSVars d rl idx
+    exprValidate d [] ctx $ atomVal atom
+    let vars = ctxAllVars d ctx
     -- variable cannot be declared and used in the same atom
     uniq' (\_ -> pos atom) fst (\(v,_) -> "Variable " ++ v ++ " is both declared and used inside relational atom " ++ show atom)
         $ filter (\(var, _) -> isNothing $ find ((==var) . name) vars)
-        $ atomVarOccurrences (CtxRuleRAtom rl idx) $ atomVal atom
+        $ atomVarOccurrences ctx $ atomVal atom
 
-ruleRHSValidate d rl@Rule{..} (RHSCondition e) idx = do
+ruleRHSValidate :: (MonadError String me) => DatalogProgram -> Rule -> RuleRHS -> Int -> me ()
+ruleRHSValidate d rl@Rule{..} (RHSLiteral _ atom) idx =
+    atomValidate d (CtxRuleRAtom rl idx) atom
+
+ruleRHSValidate d rl@Rule{..} (RHSCondition e) idx =
     exprValidate d [] (CtxRuleRCond rl idx) e
 
 ruleRHSValidate d rl@Rule{..} (RHSFlatMap _ e) idx = do

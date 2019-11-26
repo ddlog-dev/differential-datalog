@@ -61,6 +61,7 @@ module Language.DifferentialDatalog.Syntax (
         KeyExpr(..),
         RelationRole(..),
         Relation(..),
+        Index(..),
         RuleRHS(..),
         rhsIsLiteral,
         rhsIsPositiveLiteral,
@@ -465,6 +466,27 @@ instance PP Relation where
 
 instance Show Relation where
     show = render . pp
+
+data Index = Index { idxPos      :: Pos
+                   , idxName     :: String
+                   , idxVars     :: [Field]
+                   , idxAtom     :: Atom
+                   }
+
+instance Eq Index where
+    (==) (Index _ n1 v1 a1) (Index _ n2 v2 a2) = (n1, v1, a1) == (n2, v2, a2)
+
+instance WithPos Index where
+    pos = idxPos
+    atPos i p = i {idxPos = p}
+
+instance WithName Index where
+    name = idxName
+    setName i n = i{idxName = n}
+
+instance PP Index where
+    pp Index{..} = "index" <+> pp idxName <+> (parens $ commaSep $ map pp idxVars) <+>
+                   "on" <+> pp idxAtom
 
 data Atom = Atom { atomPos      :: Pos
                  , atomRelation :: String
@@ -928,6 +950,7 @@ data DatalogProgram = DatalogProgram { progImports      :: [Import]
                                      , progFunctions    :: M.Map String Function
                                      , progTransformers :: M.Map String Transformer
                                      , progRelations    :: M.Map String Relation
+                                     , progIndexes      :: M.Map String Index
                                      , progRules        :: [Rule]
                                      , progApplys       :: [Apply]
                                      }
@@ -944,6 +967,8 @@ instance PP DatalogProgram where
                              (map pp $ M.elems progTransformers)
                              ++
                              (map pp $ M.elems progRelations)
+                             ++
+                             (map pp $ M.elems progIndexes)
                              ++
                              (map pp progRules)
                              ++
@@ -968,6 +993,7 @@ emptyDatalogProgram = DatalogProgram { progImports       = []
                                      , progFunctions     = M.empty
                                      , progTransformers  = M.empty
                                      , progRelations     = M.empty
+                                     , progIndexes       = M.empty
                                      , progRules         = []
                                      , progApplys        = []
                                      }
@@ -1017,6 +1043,8 @@ data ECtx = -- | Top-level context. Serves as the root of the context hierarchy.
           | CtxRuleRAggregate {ctxRule::Rule, ctxIdx::Int}
             -- | Key expression
           | CtxKey            {ctxRelation::Relation}
+            -- | Index expression
+          | CtxIndex          {ctxIndex::Index}
             -- | Argument passed to a function
           | CtxApply          {ctxParExpr::ENode, ctxPar::ECtx, ctxIdx::Int}
             -- | Field expression: 'X.f'
@@ -1085,6 +1113,7 @@ instance PP ECtx where
                     CtxRuleRFlatMap{..}   -> "CtxRuleRFlatMap   " <+> rule <+> pp ctxIdx
                     CtxRuleRAggregate{..} -> "CtxRuleRAggregate " <+> rule <+> pp ctxIdx
                     CtxKey{..}            -> "CtxKey            " <+> rel
+                    CtxIndex{..}          -> "CtxIndex          " <+> pp (name ctxIndex)
                     CtxFunc{..}           -> "CtxFunc           " <+> (pp $ name ctxFunc)
                     CtxApply{..}          -> "CtxApply          " <+> epar <+> pp ctxIdx
                     CtxField{..}          -> "CtxField          " <+> epar
@@ -1123,6 +1152,7 @@ ctxParent CtxRuleRCond{}      = CtxTop
 ctxParent CtxRuleRFlatMap{}   = CtxTop
 ctxParent CtxRuleRAggregate{} = CtxTop
 ctxParent CtxKey{}            = CtxTop
+ctxParent CtxIndex{}          = CtxTop
 ctxParent CtxFunc{}           = CtxTop
 ctxParent ctx                 = ctxPar ctx
 
