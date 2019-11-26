@@ -94,6 +94,9 @@ vALUE_VAR1 = "__v1"
 vALUE_VAR2 :: Doc
 vALUE_VAR2 = "__v2"
 
+vALUE_VAR12 :: Doc
+vALUE_VAR12 = "__v12"
+
 -- Input argument to aggregation function
 gROUP_VAR :: Doc
 gROUP_VAR = "__group__"
@@ -1164,7 +1167,11 @@ createRelArrangements :: DatalogProgram -> Relation -> CompilerMonad ()
 createRelArrangements d rel = mapM_ (createRuleArrangements d) $ relRules d $ name rel
 
 createRuleArrangements :: DatalogProgram -> Rule -> CompilerMonad ()
-createRuleArrangements d rule = do
+createRuleArrangements d rule | ruleIsMultiway rule =
+    mapM_ (\delta -> mapM_ (createRuleArrangement d delta)
+                           [1..(length (ruleRHS delta) - 1)])
+          $ multiwayRuleDeltas d rule
+                              | otherwise = do
     -- Arrange the first atom in the rule if needed
     let arr = ruleArrangeFstLiteral d rule
     when (isJust arr)
@@ -1309,7 +1316,7 @@ compileRelation d rn = do
     let (facts, rules) =
                 partition (null . ruleRHS)
                 $ relRules d rn
-    rules' <- mapM (\rl -> compileRule d rl 0 True) rules
+    rules' <- mapM (compileRule d) rules
     facts' <- mapM (compileFact d) facts
     key_func <- maybe (return "None")
                       (\k -> do lambda <- compileKey d rel k
@@ -1371,18 +1378,76 @@ ruleArrangeFstLiteral d rl@Rule{..} | null ruleRHS = Nothing
     conds = takeWhile (rhsIsCondition . (ruleRHS !!)) [1 .. length ruleRHS - 1]
     -- Index of the next operator
     rhs_idx = length conds + 1
-    -- Next RHS operator to process
-    rhs = ruleRHS !! rhs_idx
     -- Input arrangement expected by the next operator (if any)
     arrange_input_by = if rhs_idx == length ruleRHS
                           then Nothing
-                          else rhsInputArrangement d rl rhs_idx rhs
+                          else rhsInputArrangement d rl rhs_idx
     -- If we're at the start of the rule and need to arrange the input relation, generate
     -- arrangement pattern.
     input_arrangement = if all (rhsIsFilterCondition . (ruleRHS !!)) conds
                            then maybe Nothing (arrangeInput d (rhsAtom $ head ruleRHS) (CtxRuleRAtom rl 0) . fst) arrange_input_by
                            else Nothing
 
+compileRule :: (?cfg::CompilerConfig) => DatalogProgram -> Rule -> CompilerMonad Doc
+compileRule d rl | ruleIsMultiway rl = compileMultiwayRule d rl
+                 | otherwise         = compileRule' d rl 0 True
+
+compileMultiwayRule :: (?cfg::CompilerConfig) => DatalogProgram -> Rule -> CompilerMonad Doc
+compileMultiwayRule d rl@Rule{..} = do
+    deltas <- mapM (compileDeltaRule d) $ multiwayRuleDeltas d rl
+    return $ "/*" <+> pp rl <+> "*/"                                                    $$
+             "Rule::DeltaRule {"                                                        $$
+             "    description:" <+> pp (show $ show rl) <> ".to_string(),"              $$
+             "    deltas: vec!["                                                        $$
+             (nest' $ nest' $ vcommaSep deltas)                                         $$
+             "    ]"                                                                    $$
+             "}"
+
+-- Convert a '#[multiway]' rule to a list of delta rules.
+multiwayRuleDeltas :: DatalogProgram -> Rule -> [Rule]
+multiwayRuleDeltas d rl@Rule{..} =
+    -- Generate a delta rule for each literal.
+    map (\lit ->
+          -- Label all literals before 'lit' as delayed
+          -- Move lit to the front.
+          -- Re-order remaining literals to maximize joins.
+          -- Pull each filter as early as possible inside the rule.
+          ruleMoveCondsUp d
+            $ (\_rl -> ruleOptimizeJoins d _rl 1)
+            $ (\_rl -> ruleMoveRHSLeft _rl lit 0)
+            $ rl{ruleRHS = mapIdx (\rhs i -> if i < lit && rhsIsLiteral rhs
+                                             then rhs{rhsDelayed = True} else rhs)
+                                  ruleRHS})
+        literals
+    -- Indices of literals in the rule.
+    where
+    literals = map snd
+               $ filter (rhsIsPositiveLiteral . fst)
+               $ zip ruleRHS [0..]
+
+compileDeltaRule :: (?cfg::CompilerConfig) => DatalogProgram -> Rule -> CompilerMonad Doc
+compileDeltaRule d rl = do
+    let atom = rhsAtom $ head $ ruleRHS rl
+    -- Open and filter first literal.
+    open <- openAtom d vALUE_VAR rl 0 atom "return None"
+    let filters = mkFilters d rl 0
+    let join_indices = tail $ findIndices rhsIsPositiveLiteral $ ruleRHS rl
+    let next_join_idx = head join_indices
+    ret <- mkVarsTupleValue d
+           $ (rhsVarsAfter d rl (next_join_idx - 1)) `intersect` (rhsVarsAfter d rl next_join_idx)
+    let fmfun = "&{fn __f(" <> vALUE_VAR <> ": DDValue) -> Option<DDValue>" $$
+                (braces' $ open $$
+                           vcat filters $$
+                           "Some(" <> ret <> ")")                           $$
+                "__f}"
+    -- Generate a `DeltaOp::Join` for each remaining join operator.
+    delta_ops <- mapM (mkDeltaJoinOp d rl) join_indices
+    return $ "/* " <+> pp rl <+> "*/"  $$
+             "DeltaRule {"                                              $$
+             "   rel:" <+> relId (atomRelation atom) <> ","             $$
+             "   fmfun:" <+> fmfun <> ","                               $$
+             "   ops: vec![" <> vcommaSep delta_ops <> "]"              $$
+             "}"
 
 {- Generate Rust representation of a Datalog rule
 
@@ -1397,8 +1462,8 @@ ruleArrangeFstLiteral d rl@Rule{..} | null ruleRHS = Nothing
 -- 'input_val' - true if the relation generated by the last operator is a Value, not
 -- tuple.  This is the case when we've only encountered antijoins so far (since antijoins
 -- do not rearrange the input relation).
-compileRule :: (?cfg::CompilerConfig) => DatalogProgram -> Rule -> Int -> Bool -> CompilerMonad Doc
-compileRule d rl@Rule{..} last_rhs_idx input_val = {-trace ("compileRule " ++ show rl ++ " / " ++ show last_rhs_idx) $-} do
+compileRule' :: (?cfg::CompilerConfig) => DatalogProgram -> Rule -> Int -> Bool -> CompilerMonad Doc
+compileRule' d rl@Rule{..} last_rhs_idx input_val = {-trace ("compileRule " ++ show rl ++ " / " ++ show last_rhs_idx) $-} do
     -- First relation in the body of the rule
     let fstatom = rhsAtom $ head ruleRHS
     -- RHSConditions between last_rhs_idx and the next operator that is not an RHSCondition.
@@ -1410,7 +1475,7 @@ compileRule d rl@Rule{..} last_rhs_idx input_val = {-trace ("compileRule " ++ sh
     -- Input arrangement expected by the next operator (if any)
     let arrange_input_by = if rhs_idx == length ruleRHS
                               then Nothing
-                              else rhsInputArrangement d rl rhs_idx rhs
+                              else rhsInputArrangement d rl rhs_idx
     -- Input arrangement expected by the next operator (if any)
     let input_arrangement = ruleArrangeFstLiteral d rl
     -- If we're at the start of the rule and need to arrange the input relation, generate
@@ -1428,10 +1493,10 @@ compileRule d rl@Rule{..} last_rhs_idx input_val = {-trace ("compileRule " ++ sh
     -- Generate XFormCollection or XFormArrangement for the 'rhs' operator.
     let mkArrangedOperator conditions inpval =
             case rhs of
-                 RHSLiteral _ True a _ -> mkJoin d conditions inpval a rl rhs_idx
-                 RHSLiteral _ False a _ -> mkAntijoin d conditions inpval a rl rhs_idx
-                 RHSAggregate{}       -> mkAggregate d conditions inpval rl rhs_idx
-                 _                    -> error $ "compileRule: operator " ++ show rhs ++ " does not expect arranged input"
+                 RHSLiteral{rhsPolarity=True}  -> mkJoin d conditions inpval rl rhs_idx
+                 RHSLiteral{rhsPolarity=False} -> mkAntijoin d conditions inpval rl rhs_idx
+                 RHSAggregate{}                -> mkAggregate d conditions inpval rl rhs_idx
+                 _                             -> error $ "compileRule: operator " ++ show rhs ++ " does not expect arranged input"
     let mkCollectionOperator | rhs_idx == length ruleRHS
                              = mkHead d prefix rl
                              | otherwise =
@@ -1490,19 +1555,21 @@ compileRule d rl@Rule{..} last_rhs_idx input_val = {-trace ("compileRule " ++ sh
 -- The first component of the return tuple is the list of expressions that must be used
 -- to index the input collection.  The second component lists variables that
 -- will form the value of the arrangement.
-rhsInputArrangement :: DatalogProgram -> Rule -> Int -> RuleRHS -> Maybe ([(Expr, ECtx)], [Field])
-rhsInputArrangement d rl rhs_idx (RHSLiteral _ _ atom _) =
-    let ctx = CtxRuleRAtom rl rhs_idx
-        (_, vmap) = normalizeArrangement d ctx $ atomVal atom
-    in Just $ (map (\(_,e,c) -> (e,c)) vmap,
-               -- variables visible before join that are still in use after it
-               (rhsVarsAfter d rl (rhs_idx - 1)) `intersect` (rhsVarsAfter d rl rhs_idx))
-rhsInputArrangement d rl rhs_idx (RHSAggregate _ _ vs _ _) =
-    let ctx = CtxRuleRAggregate rl rhs_idx
-    in Just $ (map (\v -> (eVar v, ctx)) vs,
-               -- all visible variables to preserve multiset semantics
-               rhsVarsAfter d rl (rhs_idx - 1))
-rhsInputArrangement _ _  _       _ = Nothing
+rhsInputArrangement :: DatalogProgram -> Rule -> Int -> Maybe ([(Expr, ECtx)], [Field])
+rhsInputArrangement d rl rhs_idx =
+    case ruleRHS rl !! rhs_idx of
+        RHSLiteral{..} ->
+            let ctx = CtxRuleRAtom rl rhs_idx
+                (_, vmap) = normalizeArrangement d ctx $ atomVal rhsAtom
+            in Just $ (map (\(_,e,c) -> (e,c)) vmap,
+                       -- variables visible before join that are still in use after it
+                       (rhsVarsAfter d rl (rhs_idx - 1)) `intersect` (rhsVarsAfter d rl rhs_idx))
+        RHSAggregate{..} ->
+            let ctx = CtxRuleRAggregate rl rhs_idx
+            in Just $ (map (\v -> (eVar v, ctx)) rhsGroupBy,
+                       -- all visible variables to preserve multiset semantics
+                       rhsVarsAfter d rl (rhs_idx - 1))
+        _ -> Nothing
 
 mkFlatMap :: (?cfg::CompilerConfig) => DatalogProgram -> Doc -> Rule -> Int -> String -> Expr -> CompilerMonad Doc
 mkFlatMap d prefix rl idx v e = do
@@ -1517,7 +1584,7 @@ mkFlatMap d prefix rl idx v e = do
                   flatten $$
                   clones  $$
                   "Some(Box::new(__flattened.into_iter().map(move |" <> pp v <> "|" <> vars <> ")))"
-    next <- compileRule d rl idx False
+    next <- compileRule' d rl idx False
     return $
         "XFormCollection::FlatMap{"                                                                                         $$
         "    description:" <+> (pp $ show $ show $ rulePPPrefix rl $ idx + 1) <+> ".to_string(),"                           $$
@@ -1527,9 +1594,9 @@ mkFlatMap d prefix rl idx v e = do
 
 mkAggregate :: (?cfg::CompilerConfig) => DatalogProgram -> [Int] -> Bool -> Rule -> Int -> CompilerMonad Doc
 mkAggregate d filters input_val rl@Rule{..} idx = do
-    let rhs@RHSAggregate{..} = ruleRHS !! idx
+    let RHSAggregate{..} = ruleRHS !! idx
     let ctx = CtxRuleRAggregate rl idx
-    let Just (_, group_vars) = rhsInputArrangement d rl idx rhs
+    let Just (_, group_vars) = rhsInputArrangement d rl idx
     -- Filter inputs before grouping
     ffun <- mkFFun d rl filters
     -- Function to extract the argument of aggregation function from 'Value'
@@ -1556,7 +1623,7 @@ mkAggregate d filters input_val rl@Rule{..} idx = do
                 $ open_key  $$
                   aggregate $$
                   result
-    next <- compileRule d rl idx False
+    next <- compileRule' d rl idx False
     return $
         "XFormArrangement::Aggregate{"                                                                                           $$
         "    description:" <+> (pp $ show $ show $ rulePPPrefix rl $ idx + 1) <> ".to_string(),"                                 $$
@@ -1693,8 +1760,18 @@ mkFFun d rl@Rule{..} input_filters = do
 -- Compile XForm::Join or XForm::Semijoin
 -- Returns generated xform and index of the last RHS term consumed by
 -- the XForm
-mkJoin :: (?cfg::CompilerConfig) => DatalogProgram -> [Int] -> Bool -> Atom -> Rule -> Int -> CompilerMonad Doc
-mkJoin d input_filters input_val atom rl@Rule{..} join_idx = do
+mkJoin :: (?cfg::CompilerConfig) => DatalogProgram -> [Int] -> Bool -> Rule -> Int -> CompilerMonad Doc
+mkJoin d input_filters input_val rl join_idx =
+    _mkJoin d False input_filters input_val rl join_idx
+
+mkDeltaJoinOp :: (?cfg::CompilerConfig) => DatalogProgram -> Rule -> Int -> CompilerMonad Doc
+mkDeltaJoinOp d rl join_idx =
+    _mkJoin d True [] False rl join_idx
+
+_mkJoin :: (?cfg::CompilerConfig) => DatalogProgram -> Bool -> [Int] -> Bool -> Rule -> Int -> CompilerMonad Doc
+_mkJoin d is_delta input_filters input_val rl@Rule{..} join_idx = do
+    let rhs = ruleRHS !! join_idx
+    let atom = rhsAtom rhs
     -- Build arrangement to join with
     let ctx = CtxRuleRAtom rl join_idx
     let (arr, _) = normalizeArrangement d ctx $ atomVal atom
@@ -1727,10 +1804,15 @@ mkJoin d input_filters input_val atom rl@Rule{..} join_idx = do
         simplify (E e@ERef{..})     = E e{exprPattern = simplify exprPattern}
         simplify _                  = ePHolder
     -- Join function: open up both values, apply filters.
-    open <- if is_semi
-               then open_input vALUE_VAR1
-               else liftM2 ($$) (open_input vALUE_VAR1)
-                           (openAtom d vALUE_VAR2 rl join_idx (atom{atomVal = simplify $ atomVal atom}) "return None")
+    open <- let (v1,v2) = if is_delta
+                          then ("&" <> vALUE_VAR12 <> ".0", "&" <> vALUE_VAR12 <> ".1")
+                          else (vALUE_VAR1, vALUE_VAR2) in
+            if is_semi
+               then open_input v1
+               else liftM2 ($$) (open_input v1)
+                           (openAtom d v2 rl join_idx (atom{atomVal = simplify $ atomVal atom}) "return None")
+    -- DeltaOp additionally requires opening input to extract key from it.
+    kopen <- open_input vALUE_VAR
     let filters = mkFilters d rl join_idx
         last_idx = join_idx + length filters
     -- If we're at the end of the rule, generate head atom; otherwise
@@ -1738,42 +1820,67 @@ mkJoin d input_filters input_val atom rl@Rule{..} join_idx = do
     (ret, next) <- if last_idx == length ruleRHS - 1
         then (, "None") <$> mkValue' d (CtxRuleL rl 0) (atomVal $ head $ ruleLHS)
         else do ret <- mkVarsTupleValue d $ rhsVarsAfter d rl last_idx
-                next <- compileRule d rl last_idx False
+                next <- compileRule' d rl last_idx False
                 return (ret, next)
     let jfun = braces' $ open                     $$
                          vcat filters             $$
                          "Some" <> parens ret
-    return $
-        if is_semi
-           then "XFormArrangement::Semijoin{"                                                                                   $$
-                "    description:" <+> (pp $ show $ show $ rulePPPrefix rl $ join_idx + 1) <> ".to_string(),"                   $$
-                "    ffun:" <+> ffun <> ","                                                                                     $$
-                "    arrangement: (" <> relId (atomRelation atom) <> "," <> pp aid <> "),"                                      $$
-                "    jfun: &{fn __f(_: &DDValue ," <> vALUE_VAR1 <> ": &DDValue,_" <> vALUE_VAR2 <> ": &()) -> Option<DDValue>"       $$
-                nest' jfun                                                                                                      $$
-                "    __f},"                                                                                                     $$
-                "    next: Box::new(" <> next  <> ")"                                                                           $$
-                "}"
-           else "XFormArrangement::Join{"                                                                                       $$
-                "    description:" <+> (pp $ show $ show $ rulePPPrefix rl $ join_idx + 1) <> ".to_string(),"                   $$
-                "    ffun:" <+> ffun <> ","                                                                                     $$
-                "    arrangement: (" <> relId (atomRelation atom) <> "," <> pp aid <> "),"                                      $$
-                "    jfun: &{fn __f(_: &DDValue ," <> vALUE_VAR1 <> ": &DDValue," <> vALUE_VAR2 <> ": &DDValue) -> Option<DDValue>"     $$
-                nest' jfun                                                                                                      $$
-                "    __f},"                                                                                                     $$
-                "    next: Box::new(" <> next <> ")"                                                                            $$
-                "}"
+    if is_delta
+        then do
+            let Just (key_vars, _) = rhsInputArrangement d rl join_idx
+            kval <- mkVarsTupleValue d $ map (\(E (EVar _ v),ctx') -> Field nopos v $ exprType d ctx' $ eVar v) key_vars
+            let kfun = "&{fn __f(" <> vALUE_VAR <> ": &DDValue) -> DDValue" $$
+                       (braces' $ kopen $$ kval)  $$
+                       "__f}"
+            return $ if is_semi
+            then "DeltaOp::Semijoin {"                                                                                           $$
+                 "    keyfunc:" <+> kfun <> ","                                                                                  $$
+                 "    arrangement: (" <> relId (atomRelation atom) <> "," <+> pp aid <> "),"                                     $$
+                 "    timestamp:" <+> (if rhsDelayed rhs then "OldNew::Old" else "OldNew::New") <> ","                           $$
+                 "    pfunc: &{fn __f(" <> vALUE_VAR12 <> ": (DDValue, ())) -> Option<DDValue>"                                  $$
+                 nest' jfun                                                                                                      $$
+                 "    __f},"                                                                                                     $$
+                 "}"
+            else "DeltaOp::Join {"                                                                                               $$
+                 "    keyfunc:" <+> kfun <> ","                                                                                  $$
+                 "    arrangement: (" <> relId (atomRelation atom) <> "," <+> pp aid <> "),"                                     $$
+                 "    timestamp:" <+> (if rhsDelayed rhs then "OldNew::Old" else "OldNew::New") <> ","                           $$
+                 "    pfunc: &{fn __f(" <> vALUE_VAR12 <> ": (DDValue, DDValue)) -> Option<DDValue>"                             $$
+                 nest' jfun                                                                                                      $$
+                 "    __f},"                                                                                                     $$
+                 "}"
+        else
+            return $ if is_semi
+            then "XFormArrangement::Semijoin{"                                                                                   $$
+                 "    description:" <+> (pp $ show $ show $ rulePPPrefix rl $ join_idx + 1) <> ".to_string(),"                   $$
+                 "    ffun:" <+> ffun <> ","                                                                                     $$
+                 "    arrangement: (" <> relId (atomRelation atom) <> "," <> pp aid <> "),"                                      $$
+                 "    jfun: &{fn __f(_: &DDValue ," <> vALUE_VAR1 <> ": &DDValue,_" <> vALUE_VAR2 <> ": &()) -> Option<DDValue>" $$
+                 nest' jfun                                                                                                      $$
+                 "    __f},"                                                                                                     $$
+                 "    next: Box::new(" <> next  <> ")"                                                                           $$
+                 "}"
+            else "XFormArrangement::Join{"                                                                                       $$
+                 "    description:" <+> (pp $ show $ show $ rulePPPrefix rl $ join_idx + 1) <> ".to_string(),"                   $$
+                 "    ffun:" <+> ffun <> ","                                                                                     $$
+                 "    arrangement: (" <> relId (atomRelation atom) <> "," <> pp aid <> "),"                                      $$
+                 "    jfun: &{fn __f(_: &DDValue ," <> vALUE_VAR1 <> ": &DDValue," <> vALUE_VAR2 <> ": &DDValue) -> Option<DDValue>" $$
+                 nest' jfun                                                                                                      $$
+                 "    __f},"                                                                                                     $$
+                 "    next: Box::new(" <> next <> ")"                                                                            $$
+                 "}"
 
 -- Compile XForm::Antijoin
-mkAntijoin :: (?cfg::CompilerConfig) => DatalogProgram -> [Int] -> Bool -> Atom -> Rule -> Int -> CompilerMonad Doc
-mkAntijoin d input_filters input_val Atom{..} rl@Rule{..} ajoin_idx = do
+mkAntijoin :: (?cfg::CompilerConfig) => DatalogProgram -> [Int] -> Bool -> Rule -> Int -> CompilerMonad Doc
+mkAntijoin d input_filters input_val rl@Rule{..} ajoin_idx = do
+    let Atom{..} = rhsAtom $ ruleRHS !! ajoin_idx
     -- create arrangement to anti-join with
     let ctx = CtxRuleRAtom rl ajoin_idx
     let (arr, _) = normalizeArrangement d ctx atomVal
     -- Filter inputs using 'input_filters'
     ffun <- mkFFun d rl input_filters
     aid <- fromJust <$> getAntijoinArrangement atomRelation arr
-    next <- compileRule d rl ajoin_idx input_val
+    next <- compileRule' d rl ajoin_idx input_val
     return $ "XFormArrangement::Antijoin {"                                                                   $$
              "    description:" <+> (pp $ show $ show $ rulePPPrefix rl $ ajoin_idx + 1) <> ".to_string(),"   $$
              "    ffun:" <+> ffun <> ","                                                                      $$
@@ -1857,7 +1964,6 @@ normalizePattern d ctx e =
                                  -> ePHolder
          _                       -> E e
 
--- 'fstatom' is the first atom in the body of a rule.
 -- 'arrange_input_by' - list of expressions to arrange by that correspond to
 -- '_0', '_1', ...   Returns normalized arrangement or 'Nothing' if
 -- the arrangement cannot be represented in a normalized form

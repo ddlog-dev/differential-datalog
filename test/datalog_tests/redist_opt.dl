@@ -22,6 +22,7 @@ input relation DdlogDependency(parent: entid_t, child: entid_t)
 
 relation ValidDependency(parent: entid_t, child: entid_t)
 
+//#[multiway]
 ValidDependency(parent, child) :- DdlogDependency(parent, child), DdlogNode(parent, _), DdlogNode(child, _).
 
 relation ExtDdlogDependency(parent: entid_t, child: entid_t)
