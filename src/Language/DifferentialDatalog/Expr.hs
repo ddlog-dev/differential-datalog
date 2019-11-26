@@ -21,7 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 -}
 
-{-# LANGUAGE ImplicitParams, RecordWildCards, LambdaCase, TupleSections #-}
+{-# LANGUAGE FlexibleContexts, ImplicitParams, RecordWildCards, LambdaCase, TupleSections #-}
 
 module Language.DifferentialDatalog.Expr (
     exprMapM,
@@ -52,22 +52,26 @@ module Language.DifferentialDatalog.Expr (
     exprIsVarOrFieldLVal,
     exprIsVarOrField,
     exprIsInjective,
-    exprTypeMapM
+    exprTypeMapM,
+    exprValidate
     ) where
 
 import Data.List
 import Data.Maybe
 import Data.Tuple.Select
 import Control.Monad.Identity
+import Control.Monad.Except
 import qualified Data.Set as S
 --import Debug.Trace
 
 import Language.DifferentialDatalog.Ops
 import Language.DifferentialDatalog.Syntax
 import Language.DifferentialDatalog.NS
+import Language.DifferentialDatalog.Pos
 import Language.DifferentialDatalog.Util
 import Language.DifferentialDatalog.Name
 import Language.DifferentialDatalog.Type
+import Language.DifferentialDatalog.ECtx
 
 -- depth-first fold of an expression
 exprFoldCtxM :: (Monad m) => (ECtx -> ExprNode b -> m b) -> ECtx -> Expr -> m b
@@ -252,8 +256,8 @@ exprFreeVars d ctx e = visible_vars `intersect` used_vars
 -- Note: this does not guarantee that the expression can be evaluated at compile
 -- time.  It may contain a call to an external function, which cannot be
 -- evaluated in Haskell.
-exprIsConst :: Expr -> Bool
-exprIsConst = null . exprVars
+exprIsConst :: DatalogProgram -> ECtx -> Expr -> Bool
+exprIsConst d ctx e = null $ exprFreeVars d ctx e
 
 -- Variables declared inside expression, visible in the code that follows the expression
 exprVarDecls :: ECtx -> Expr -> [(String, ECtx)]
@@ -397,9 +401,9 @@ exprIsVarOrField' _                = False
 
 -- | Expression maps distinct assignments to input variables 'vs'
 -- to distinct outputs.
-exprIsInjective :: DatalogProgram -> S.Set String -> Expr -> Bool
-exprIsInjective d vs e =
-    S.fromList (exprVars e) == vs &&
+exprIsInjective :: DatalogProgram -> ECtx -> S.Set String -> Expr -> Bool
+exprIsInjective d ctx vs e =
+    S.fromList (exprFreeVars d ctx e) == vs &&
     exprFold (exprIsInjective' d) e
 
 -- No clever analysis here; just the obvious cases.
@@ -409,8 +413,8 @@ exprIsInjective' d EApply{..}    =
     -- FIXME: once we add support for recursive functions, be careful to avoid
     -- infinite recursion.  The simple thing to do is just to return False for
     -- recursive functions, as reasoning about them seems tricky otherwise.
-    and exprArgs && (maybe False (exprIsInjective d (S.fromList $ map name funcArgs)) $ funcDef)
-    where Function{..} = getFunc d exprFunc
+    and exprArgs && (maybe False (exprIsInjective d (CtxFunc f) (S.fromList $ map name funcArgs)) $ funcDef)
+    where f@Function{..} = getFunc d exprFunc
 exprIsInjective' _ EBool{}       = True
 exprIsInjective' _ EInt{}        = True
 exprIsInjective' _ EFloat{}      = True
@@ -431,3 +435,204 @@ exprTypeMapM fun e = exprFoldM fun' e
     fun' (ETyped p e' t) = (E . ETyped p e') <$> typeMapM fun t
     fun' (EAs p e' t)    = (E . EAs p e') <$> typeMapM fun t
     fun' e'              = return $ E e'
+
+
+exprValidate :: (MonadError String me) => DatalogProgram -> [String] -> ECtx -> Expr -> me ()
+exprValidate d tvars ctx e = {-trace ("exprValidate " ++ show e ++ " in \n" ++ show ctx) $ -} do
+    exprTraverseCtxM (exprValidate1 d tvars) ctx e
+    exprTraverseTypeME d (exprValidate2 d) ctx e
+    exprTraverseCtxM (exprCheckMatchPatterns d) ctx e
+
+-- This function does not perform type checking: just checks that all functions and
+-- variables are defined; the number of arguments matches declarations, etc.
+exprValidate1 :: (MonadError String me) => DatalogProgram -> [String] -> ECtx -> ExprNode Expr -> me ()
+exprValidate1 _ _ ctx EVar{..} | ctxInRuleRHSPositivePattern ctx
+                                          = return ()
+exprValidate1 d _ ctx (EVar p v)          = do _ <- checkVar p d ctx v
+                                               return ()
+exprValidate1 d _ ctx (EApply p f as)     = do
+    fun <- checkFunc p d f
+    check (length as == length (funcArgs fun)) p
+          "Number of arguments does not match function declaration"
+    mapM_ (\(a, mut) -> when mut $ checkLExpr d ctx a)
+          $ zip as (map argMut $ funcArgs fun)
+exprValidate1 _ _ _   EField{}            = return ()
+exprValidate1 _ _ _   ETupField{}         = return ()
+exprValidate1 _ _ _   EBool{}             = return ()
+exprValidate1 _ _ _   EInt{}              = return ()
+exprValidate1 _ _ _   EFloat{}            = return ()
+exprValidate1 _ _ _   EDouble{}           = return ()
+exprValidate1 _ _ _   EString{}           = return ()
+exprValidate1 _ _ _   EBit{}              = return ()
+exprValidate1 _ _ _   ESigned{}           = return ()
+exprValidate1 d _ ctx (EStruct p c _)     = do -- initial validation was performed by exprDesugar
+    let tdef = consType d c
+    case find ctxIsSetL $ ctxAncestors ctx of
+         Nothing -> return ()
+         Just ctx' -> when (not $ ctxIsRuleRCond $ ctxParent ctx') $ do
+            check ((length $ typeCons $ fromJust $ tdefType tdef) == 1) p
+                   $ "Type constructor in the left-hand side of an assignment is only allowed for types with one constructor, \
+                     \ but \"" ++ name tdef ++ "\" has multiple constructors"
+exprValidate1 _ _ _   ETuple{}            = return ()
+exprValidate1 _ _ _   ESlice{}            = return ()
+exprValidate1 _ _ _   EMatch{}            = return ()
+exprValidate1 d _ ctx (EVarDecl p v)      = do
+    check (ctxInSetL ctx || ctxInMatchPat ctx) p "Variable declaration is not allowed in this context"
+    checkNoVar p d ctx v
+{-                                     | otherwise
+                                          = do checkNoVar p d ctx v
+                                               check (ctxIsTyped ctx) p "Variable declared without a type"
+                                               check (ctxIsSeq1 $ ctxParent ctx) p
+                                                      "Variable declaration is not allowed in this context"-}
+exprValidate1 _ _ _   ESeq{}              = return ()
+exprValidate1 _ _ _   EITE{}              = return ()
+exprValidate1 d _ ctx EFor{..}            = checkNoVar exprPos d ctx exprLoopVar
+exprValidate1 d _ ctx (ESet _ l _)        = checkLExpr d ctx l
+exprValidate1 _ _ ctx (EContinue p)       = check (ctxInForLoopBody ctx) p "\"continue\" outside of a loop"
+exprValidate1 _ _ ctx (EBreak p)          = check (ctxInForLoopBody ctx) p "\"break\" outside of a loop"
+exprValidate1 _ _ ctx (EReturn p _)       = check (isJust $ ctxInFunc ctx) p "\"return\" outside of a function body"
+exprValidate1 _ _ _   EBinOp{}            = return ()
+exprValidate1 _ _ _   EUnOp{}             = return ()
+
+exprValidate1 _ _ ctx (EPHolder p)        = do
+    let msg = case ctx of
+                   CtxStruct EStruct{..} _ f -> "Missing field '" ++ f ++ "' in constructor " ++ exprConstructor
+                   _               -> "_ is not allowed in this context"
+    check (ctxPHolderAllowed ctx) p msg
+exprValidate1 d _ ctx (EBinding p v _)    = do
+    checkNoVar p d ctx v
+
+exprValidate1 d tvs _ (ETyped _ _ t)      = typeValidate d tvs t
+exprValidate1 d tvs _ (EAs _ _ t)         = typeValidate d tvs t
+exprValidate1 _ _ ctx (ERef p _)          =
+    -- Rust does not allow pattern matching inside 'Arc'
+    check (ctxInRuleRHSPattern ctx || ctxInIndex ctx) p "Dereference pattern not allowed in this context"
+
+-- True if a placeholder ("_") can appear in this context
+ctxPHolderAllowed :: ECtx -> Bool
+ctxPHolderAllowed ctx =
+    case ctx of
+         CtxSetL{}        -> True
+         CtxTyped{}       -> pres
+         CtxRuleRAtom{}   -> True
+         CtxStruct{}      -> pres
+         CtxTuple{}       -> pres
+         CtxMatchPat{}    -> True
+         CtxBinding{}     -> True
+         CtxRef{}         -> True
+         CtxIndex{}       -> True
+         _                -> False
+    where
+    par = ctxParent ctx
+    pres = ctxPHolderAllowed par
+
+checkNoVar :: (MonadError String me) => Pos -> DatalogProgram -> ECtx -> String -> me ()
+checkNoVar p d ctx v = check (isNothing $ lookupVar d ctx v) p
+                              $ "Variable " ++ v ++ " already defined in this scope"
+
+-- Traverse again with types.  This pass ensures that all sub-expressions
+-- have well-defined types that match their context
+exprTraverseTypeME :: (MonadError String me) => DatalogProgram -> (ECtx -> ExprNode Type -> me ()) -> ECtx -> Expr -> me ()
+exprTraverseTypeME d = exprTraverseCtxWithM (\ctx e -> do
+    --trace ("exprTraverseTypeME " ++ show ctx ++ "\n    " ++ show e) $ return ()
+    t <- exprNodeType d ctx e
+    case ctxExpectType d ctx of
+         Nothing -> return ()
+         Just t' -> check (typesMatch d t t') (pos e)
+                          $ "Couldn't match expected type " ++ show t' ++ " with actual type " ++ show t ++ " (context: " ++ show ctx ++ ")"
+    return t)
+
+exprValidate2 :: (MonadError String me) => DatalogProgram -> ECtx -> ExprNode Type -> me ()
+exprValidate2 d _   (ESlice p e h l)    =
+    case typ' d e of
+        TBit _ w -> do check (h >= l) p
+                           $ "Upper bound of the slice must be greater than lower bound"
+                       check (h < w) p
+                           $ "Upper bound of the slice cannot exceed argument width"
+        _        -> err (pos e) $ "Expression is not a bit vector"
+
+exprValidate2 d _   (EMatch _ _ cs)     = do
+    let t = snd $ head cs
+    mapM_ ((\e -> checkTypesMatch (pos e) d t e) . snd) cs
+
+exprValidate2 d _   (EBinOp p op e1 e2) = do
+    case op of
+        Eq     -> m
+        Neq    -> m
+        Lt     -> m -- support comparisons for all datatypes
+        Gt     -> m
+        Lte    -> m
+        Gte    -> m
+        And    -> do {m; isbool}
+        Or     -> do {m; isbool}
+        Impl   -> do {m; isbool}
+        Plus   -> do {m; isNumber1}
+        Minus  -> do {m; isNumber1}
+        ShiftR -> do isint1
+        ShiftL -> do isint1
+        Mod    -> do {m; isint1; isint2}
+        Times  -> do {m; isNumber1; isNumber2}
+        Div    -> do {m; isNumber1; isNumber2}
+        BAnd   -> do {m; isbitOrSigned1}
+        BOr    -> do {m; isbitOrSigned1}
+        BXor   -> do {m; isbitOrSigned1}
+        Concat | isString d e1
+               -> return ()
+        Concat -> do {isbit1; isbit2}
+    where m = checkTypesMatch p d e1 e2
+          isint1 = check (isBigInt d e1 || isBit d e1 || isSigned d e1) (pos e1) "Not an integer"
+          isint2 = check (isBigInt d e2 || isBit d e2 || isSigned d e2) (pos e2) "Not an integer"
+          isNumber1 = check (isInteger d e1 || isFP d e1) (pos e1) "Not a number"
+          isNumber2 = check (isInteger d e2 || isFP d e2) (pos e2) "Not a number"
+          isbit1 = check (isBit d e1) (pos e1) "Not a bit vector"
+          isbitOrSigned1 = check (isBit d e1 || isSigned d e1) (pos e1) "Not a bit<> or signed<> value"
+          isbit2 = check (isBit d e2) (pos e2) "Not a bit vector"
+          isbool = check (isBool d e1) (pos e1) "Not a Boolean"
+
+exprValidate2 d _   (EUnOp _ BNeg e)    =
+    check (isBit d e || isSigned d e) (pos e) "Not a bit vector"
+exprValidate2 d _   (EUnOp _ UMinus e)    =
+    check (isSigned d e || isBigInt d e || isFP d e) (pos e)
+        $ "Cannot negate expression of type " ++ show e ++ ". Negation applies to signed<> and bigint values only."
+--exprValidate2 d ctx (EVarDecl p x)      = check (isJust $ ctxExpectType d ctx) p
+--                                                 $ "Cannot determine type of variable " ++ x -- Context: " ++ show ctx
+exprValidate2 d _   (EITE p _ t e)       = checkTypesMatch p d t e
+exprValidate2 d _   (EFor p _ i _)       = checkIterable "iterator" p d i
+exprValidate2 d _   (EAs p e t)          = do
+    check (not (isBigInt d e && isBit d t)) p
+        $ "Direct casts from bigint to bit<> are not supported; consider going through signed<>" ++ (show $ pos e)
+    check (isInteger d e || isFP d e) p
+        $ "Cannot type-cast expression of type " ++ show e ++ ".  The type-cast operator is only supported for numeric types."
+    check (isInteger d t || isFP d t) p
+        $ "Cannot type-cast expression to " ++ show t ++ ".  Only numeric types can be cast to."
+    check (not (isInteger d t && isFP d e)) p
+        $ "There are no direct casts from floating point to integers; use the library functions int_from_*." ++ show e
+    when ((isBit d t || isSigned d t) && (isBit d e || isSigned d e)) $
+        check (isBit d e == isBit d t || typeWidth e' == typeWidth t') p $
+            "Conversion between signed and unsigned bit vectors only supported across types of the same bit width. " ++
+            "Try casting to " ++ show (t'{typeWidth = typeWidth e'}) ++ " first."
+    where
+    e' = typ' d e
+    t' = typ' d t
+exprValidate2 _ _   _                    = return ()
+
+checkLExpr :: (MonadError String me) => DatalogProgram -> ECtx -> Expr -> me ()
+checkLExpr d ctx e | ctxIsRuleRCond ctx =
+    check (exprIsPattern e) (pos e)
+        $ "Left-hand side of an assignment term can only contain variable declarations, type constructors, and tuples"
+                   | otherwise =
+    check (exprIsVarOrFieldLVal d ctx e || exprIsDeconstruct d e) (pos e)
+        $ "Expression " ++ show e ++ " is not an l-value" -- in context " ++ show ctx
+
+exprCheckMatchPatterns :: (MonadError String me) => DatalogProgram -> ECtx -> ExprNode Expr -> me ()
+exprCheckMatchPatterns d ctx e@(EMatch _ x cs) = do
+    let t = exprType d (CtxMatchExpr e ctx) x
+        ct0 = typeConsTree t
+    ct <- foldM (\ct pat -> do let (leftover, abducted) = consTreeAbduct d ct pat
+                               check (not $ consTreeEmpty abducted) (pos pat)
+                                      "Unsatisfiable match pattern"
+                               return leftover)
+                ct0 (map fst cs)
+    check (consTreeEmpty ct) (pos x) "Non-exhaustive match patterns"
+
+exprCheckMatchPatterns _ _   _               = return ()
