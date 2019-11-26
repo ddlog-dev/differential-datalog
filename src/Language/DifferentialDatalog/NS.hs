@@ -119,7 +119,6 @@ checkRelation p d n = case lookupRelation d n of
 getRelation :: DatalogProgram -> String -> Relation
 getRelation d n = fromJust $ lookupRelation d n
 
--- All variables available in the scope: (l-vars, read-only vars)
 type MField = (String, Maybe Type)
 
 f2mf :: Field -> MField
@@ -131,6 +130,7 @@ arg2mf a = (name a, Just $ argType a)
 ctxAllVars :: DatalogProgram -> ECtx -> [Field]
 ctxAllVars d ctx = let (lvs, rvs) = ctxVars d ctx in lvs ++ rvs
 
+-- All variables available in the scope: (l-vars, read-only vars)
 ctxVars :: DatalogProgram -> ECtx -> ([Field], [Field])
 ctxVars d ctx = let (lvs, rvs) = ctxMVars d ctx in
                 (map (\(n, mt) -> (Field nopos [] n $ maybe (error $ "variable " ++ n ++ " has unknown type") id mt)) lvs,
@@ -170,8 +170,8 @@ ctxMVars d ctx =
          CtxForBody e@EFor{..} pctx -> let loopvar = (exprLoopVar, typeIterType d =<< exprTypeMaybe d (CtxForIter e pctx) exprIter)
                                            -- variables that occur in the iterator expression cannot
                                            -- be modified inside the loop
-                                           plvars_not_iter = filter (\(v,_) -> notElem v $ exprVars exprIter) plvars
-                                           plvars_iter = filter (\(v,_) -> elem v $ exprVars exprIter) plvars
+                                           plvars_not_iter = filter (\(v,_) -> notElem v $ exprFreeVars d (CtxForIter e pctx) exprIter) plvars
+                                           plvars_iter = filter (\(v,_) -> elem v $ exprFreeVars d (CtxForIter e pctx) exprIter) plvars
                                        in (plvars_not_iter, prvars ++ plvars_iter ++ [loopvar])
          CtxForBody _ _           -> error $ "NS.ctxMVars: invalid context " ++ show ctx
          CtxSetL _ _              -> (plvars, prvars)
