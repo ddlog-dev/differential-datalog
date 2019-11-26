@@ -538,13 +538,13 @@ instance Show Atom where
 -- positive/negative polarity, Boolean conditions, aggregation and
 -- disaggregation (flatmap) operations.  The last two must occur after
 -- all atoms.
-data RuleRHS = RHSLiteral   {rhsPos :: Pos, rhsPolarity :: Bool, rhsAtom :: Atom}
+data RuleRHS = RHSLiteral   {rhsPos :: Pos, rhsPolarity :: Bool, rhsAtom :: Atom, rhsDelayed :: Bool}
              | RHSCondition {rhsPos :: Pos, rhsExpr :: Expr}
              | RHSAggregate {rhsPos :: Pos, rhsVar :: String, rhsGroupBy :: [String], rhsAggFunc :: String, rhsAggExpr :: Expr}
              | RHSFlatMap   {rhsPos :: Pos, rhsVar :: String, rhsMapExpr :: Expr}
 
 instance Eq RuleRHS where
-    (==) (RHSLiteral _ p1 a1)         (RHSLiteral _ p2 a2)          = (p1, a1) == (p2, a2)
+    (==) (RHSLiteral _ p1 a1 d1)      (RHSLiteral _ p2 a2 d2)       = (p1, a1, d1) == (p2, a2, d2)
     (==) (RHSCondition _ c1)          (RHSCondition _ c2)           = c1 == c2
     (==) (RHSAggregate _ v1 g1 a1 e1) (RHSAggregate _ v2 g2 a2 e2)  = (v1, g1, a1, e1) == (v2, g2, a2, e2)
     (==) (RHSFlatMap _ v1 e1)         (RHSFlatMap _ v2 e2)          = (v1, e1) == (v2, e2)
@@ -555,13 +555,15 @@ instance WithPos RuleRHS where
     atPos r p = r{rhsPos = p}
 
 instance PP RuleRHS where
-    pp (RHSLiteral _ True a)    = pp a
-    pp (RHSLiteral _ False a)   = "not" <+> pp a
-    pp (RHSCondition _ c)       = pp c
-    pp (RHSAggregate _ v g f e) = "var" <+> pp v <+> "=" <+> "Aggregate" <> "(" <>
-                                  (parens $ vcommaSep $ map pp g) <> comma <+>
-                                  pp f <> (parens $ pp e) <> ")"
-    pp (RHSFlatMap _ v e)       = "var" <+> pp v <+> "=" <+> "FlatMap" <> (parens $ pp e)
+    pp (RHSLiteral _ True a True)     = pp a <> "~"
+    pp (RHSLiteral _ False a True)    = "not" <+> pp a <> "~"
+    pp (RHSLiteral _ True a False)    = pp a
+    pp (RHSLiteral _ False a False)   = "not" <+> pp a
+    pp (RHSCondition _ c)             = pp c
+    pp (RHSAggregate _ v g f e)       = "var" <+> pp v <+> "=" <+> "Aggregate" <> "(" <>
+                                        (parens $ vcommaSep $ map pp g) <> comma <+>
+                                        pp f <> (parens $ pp e) <> ")"
+    pp (RHSFlatMap _ v e)             = "var" <+> pp v <+> "=" <+> "FlatMap" <> (parens $ pp e)
 
 instance Show RuleRHS where
     show = render . pp

@@ -274,7 +274,8 @@ progMirrorInputRelations d prefix =
                                                                rhsAtom = Atom { atomPos = relPos relation,
                                                                                 atomRelation = relName,
                                                                                 atomVal = eVar "x"
-                                                                              }}]}
+                                                                              },
+                                                               rhsDelayed = False}]}
     rules = map (\(n,r) -> makeRule n r) inputRels
   in d { progRelations = M.union (progRelations d) $ M.fromList relCopies,
          progRules     = (progRules d) ++ rules }

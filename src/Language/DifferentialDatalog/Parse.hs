@@ -389,7 +389,7 @@ rule = Rule nopos [] <$>
 
 rulerhs = withPos $
            do _ <- try $ lookAhead $ (optional $ reserved "not") *> (optional $ try $ varIdent <* reservedOp "in") *> (optional $ reservedOp "&") *> relIdent *> (symbol "(" <|> symbol "[")
-              RHSLiteral nopos <$> (option True (False <$ reserved "not")) <*> atom False
+              RHSLiteral nopos <$> (option True (False <$ reserved "not")) <*> atom False <*> (return False)
        <|> do _ <- try $ lookAhead $ reserved "var" *> varIdent *> reservedOp "=" *> reserved "Aggregate"
               RHSAggregate nopos <$> (reserved "var" *> varIdent) <*>
                                      (reservedOp "=" *> reserved "Aggregate" *> symbol "(" *> (parens $ commaSep varIdent)) <*>

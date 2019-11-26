@@ -139,7 +139,7 @@ addRhsToRules toAdd rules =
 convertStatement :: Statement -> [Rule]
 convertStatement (ForStatement p atom mc s) =
     let rules = convertStatement s
-        rhs0 = RHSLiteral p True atom
+        rhs0 = RHSLiteral p True atom False
         rhs1 = map (\c -> RHSCondition (pos c) c) $ maybeToList mc in
     map (\r -> r{ruleRHS=(rhs0 : rhs1 ++ ruleRHS r)}) rules
 convertStatement (IfStatement p c s Nothing) =
