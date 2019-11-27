@@ -12,6 +12,7 @@
 // TODO: namespace cleanup
 // TODO: single input relation
 
+use std::collections::btree_map::BTreeMap;
 use std::collections::hash_map;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::hash::Hash;
@@ -66,9 +67,11 @@ use crate::profile::*;
 use crate::record::Mutator;
 use crate::variable::*;
 
-type TValAgent<S, V> =
-    TraceAgent<DefaultValTrace<V, V, <S as ScopeParent>::Timestamp, Weight, u32>>;
-type TKeyAgent<S, V> = TraceAgent<DefaultKeyTrace<V, <S as ScopeParent>::Timestamp, Weight, u32>>;
+type ValTrace<S, V> = DefaultValTrace<V, V, <S as ScopeParent>::Timestamp, Weight, u32>;
+type KeyTrace<S, V> = DefaultKeyTrace<V, <S as ScopeParent>::Timestamp, Weight, u32>;
+
+type TValAgent<S, V> = TraceAgent<ValTrace<S,V>>;
+type TKeyAgent<S, V> = TraceAgent<KeyTrace<S,V>>;
 
 type TValEnter<'a, P, T, V> = TraceEnter<TValAgent<P, V>, T>;
 type TKeyEnter<'a, P, T, V> = TraceEnter<TKeyAgent<P, V>, T>;
@@ -830,10 +833,10 @@ pub type DeltaSet<V> = FnvHashMap<V, bool>;
 /// of scope. Error occurring as part of that operation are silently
 /// ignored. If you want to handle such errors, call `stop` manually.
 pub struct RunningProgram<V: Val> {
-    /* Producer side of the channel used to send commands to workers.
-     * We use async channel to avoid deadlocks when worker 0 is blocked
+    /* Producer sides of channels used to send commands to workers.
+     * We use async channels to avoid deadlocks when workers are blocked
      * in `step_or_park`. */
-    sender: mpsc::Sender<Msg<V>>,
+    senders: Vec<mpsc::Sender<Msg<V>>>,
     /* Channel to signal completion of flush requests. */
     flush_ack: mpsc::Receiver<()>,
     relations: FnvHashMap<RelId, RelationInstance<V>>,
@@ -857,7 +860,7 @@ pub struct RunningProgram<V: Val> {
 impl<V: Val> Debug for RunningProgram<V> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut builder = f.debug_struct("RunningProgram");
-        let _ = builder.field("sender", &self.sender);
+        let _ = builder.field("senders", &self.senders);
         let _ = builder.field("flush_ack", &self.flush_ack);
         let _ = builder.field(
             "relations",
@@ -1038,13 +1041,13 @@ impl<V: Val> Program<V> {
         /* Clone the program, so that it can be moved into the timely computation */
         let prog = self.clone();
 
-        /* Setup channel to communicate with the dataflow.
-         * We use async channel to avoid deadlocks when worker 0 is parked in
+        /* Setup channels to communicate with the dataflow.
+         * We use async channels to avoid deadlocks when workers are parked in
          * `step_or_park`.  This has the downside of introducing an unbounded buffer
          * that is only guaranteed to be fully flushed when the transaction commits.
          */
-        let (tx, rx) = mpsc::channel::<Msg<V>>();
-        let rx = Arc::new(Mutex::new(rx));
+        let (tx, rx): (Vec<_>, Vec<_>) = (0..nworkers).map(|_|mpsc::channel::<Msg<V>>()).unzip();
+        let rx: Arc<Mutex<Vec<Option<_>>>> = Arc::new(Mutex::new(rx.into_iter().map(|x| Some(x)).collect()));
 
         /* Channel to send flush acknowledgements. */
         let (flush_ack_send, flush_ack_recv) = mpsc::sync_channel::<()>(0);
@@ -1128,7 +1131,7 @@ impl<V: Val> Program<V> {
                     });
 
                     let rx = rx.clone();
-                    let mut all_sessions = worker.dataflow::<TS,_,_>(|outer: &mut Child<Worker<Allocator>, TS>| -> Result<_, String> {
+                    let (mut all_sessions, mut traces) = worker.dataflow::<TS,_,_>(|outer: &mut Child<Worker<Allocator>, TS>| -> Result<_, String> {
                         let mut sessions : FnvHashMap<RelId, InputSession<TS, V, Weight>> = FnvHashMap::default();
                         let mut collections : FnvHashMap<RelId, Collection<Child<Worker<Allocator>, TS>,V,Weight>> = FnvHashMap::default();
                         let mut arrangements = FnvHashMap::default();
@@ -1294,7 +1297,14 @@ impl<V: Val> Program<V> {
                                 }).probe_with(&mut probe1);
                             }
                         };
-                        Ok(sessions)
+
+                        let mut traces: BTreeMap<ArrId, _> = BTreeMap::new();
+                        for (arrid, arr) in arrangements.into_iter() {
+                            if let ArrangedCollection::Map(arranged) = arr {
+                                traces.insert(arrid, arranged.trace.clone());
+                            }
+                        }
+                        Ok((sessions, traces))
                     })?;
                     //println!("worker {} started", worker.index());
 
@@ -1314,13 +1324,18 @@ impl<V: Val> Program<V> {
                         flush_ack_send.send(()).map_err(|e| format!("failed to send ACK: {}", e))?;
                     }
 
-                    // close session handles for non-input sessions
+                    // Close session handles for non-input sessions;
+                    // close all sessions for workers other than worker 0.
                     let mut sessions: FnvHashMap<RelId, InputSession<TS, V, Weight>> =
-                        all_sessions.drain().filter(|(relid,_)|prog.get_relation(*relid).input).collect();
+                        all_sessions.drain().filter(|(relid,_)| worker_index == 0 && prog.get_relation(*relid).input).collect();
 
+                    let rx = {
+                        let mut opt_rx = None;
+                        std::mem::swap(&mut rx.lock().unwrap()[worker_index], &mut opt_rx);
+                        opt_rx.unwrap()
+                    };
                     /* Only worker 0 receives data */
                     if worker_index == 0 {
-                        let rx = rx.lock().unwrap();
                         loop {
                             /* Non-blocking receive, so that we can do some garbage collecting
                              * when there is no real work to do. */
@@ -1456,7 +1471,7 @@ impl<V: Val> Program<V> {
             .map_err(|e| format!("failed to receive ACK: {}", e))?;
 
         Ok(RunningProgram {
-            sender: tx,
+            senders: tx,
             flush_ack: flush_ack_recv,
             relations: rels,
             thread_handle: Some(h),
@@ -2291,7 +2306,7 @@ impl<V: Val> RunningProgram<V> {
 
     /* Send message to worker thread */
     fn send(&self, msg: Msg<V>) -> Response<()> {
-        match self.sender.send(msg) {
+        match self.senders[0].send(msg) {
             Err(_) => Err("failed to communicate with timely dataflow thread".to_string()),
             Ok(()) => {
                 /* Worker 0 may be blocked in `step_or_park`.  Unpark to ensure receipt of the
