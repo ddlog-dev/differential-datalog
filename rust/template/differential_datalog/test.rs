@@ -13,6 +13,7 @@
 )]
 
 use std::collections::btree_map::{BTreeMap, Entry};
+use std::collections::btree_set::BTreeSet;
 use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -785,6 +786,7 @@ fn test_join(nthreads: usize) {
             arrangements: vec![Arrangement::Map {
                 name: "arrange2.0".to_string(),
                 afun: &(afun1 as ArrangeFunc<Value>),
+                queryable: true,
             }],
             change_cb: Some(Arc::new(Mutex::new(Box::new(move |_, v, w| {
                 set_update("T2", &relset2, v, w)
@@ -894,6 +896,9 @@ fn test_join(nthreads: usize) {
 
     assert_eq!(*relset3.lock().unwrap(), set);
     assert_eq!(*relset4.lock().unwrap(), set);
+
+    let rel2dump = running.dump_arrangement((2,0)).unwrap();
+    assert_eq!(BTreeSet::from_iter(rel2dump.into_iter()), BTreeSet::from_iter(vals.iter().map(|x| Value::u64(*x))));
 
     running.stop().unwrap();
 }
@@ -1370,6 +1375,7 @@ fn test_recursion(nthreads: usize) {
             arrangements: vec![Arrangement::Map {
                 name: "arrange_by_parent".to_string(),
                 afun: &(arrange_by_fst as ArrangeFunc<Value>),
+                queryable: false,
             }],
             change_cb: Some(Arc::new(Mutex::new(Box::new(move |_, v, w| {
                 set_update("parent", &parentset, v, w)
@@ -1408,6 +1414,7 @@ fn test_recursion(nthreads: usize) {
                 Arrangement::Map {
                     name: "arrange_by_ancestor".to_string(),
                     afun: &(arrange_by_fst as ArrangeFunc<Value>),
+                    queryable: false,
                 },
                 Arrangement::Set {
                     name: "arrange_by_self".to_string(),
@@ -1417,6 +1424,7 @@ fn test_recursion(nthreads: usize) {
                 Arrangement::Map {
                     name: "arrange_by_snd".to_string(),
                     afun: &(arrange_by_snd as ArrangeFunc<Value>),
+                    queryable: false,
                 },
             ],
             change_cb: Some(Arc::new(Mutex::new(Box::new(move |_, v, w| {

@@ -445,7 +445,7 @@ pub fn updcmd2upd(c: &record::UpdCmd) -> Result<Update<Value>, String> {
             Ok(Update::Modify {
                 relid: relid as RelId,
                 k: key,
-                m: Box::new(rec.clone()),
+                m: Arc::new(rec.clone()),
             })
         }
     }
