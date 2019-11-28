@@ -49,6 +49,7 @@ use differential_dataflow::trace::implementations::ord::OrdKeySpine as DefaultKe
 use differential_dataflow::trace::implementations::ord::OrdValSpine as DefaultValTrace;
 use differential_dataflow::trace::wrappers::enter::TraceEnter;
 use differential_dataflow::trace::{BatchReader, Cursor, TraceReader};
+//use differential_dataflow::trace::cursor::CursorDebug;
 use differential_dataflow::AsCollection;
 use differential_dataflow::Collection;
 use differential_dataflow::Data;
@@ -1628,17 +1629,20 @@ impl<V: Val> Program<V> {
                 format!("handle_query: Unknown arrangement {:?}", arrid)
             })?;
         let (mut cursor, storage) = trace.cursor();
+        // for ((k, v), diffs) in cursor.to_vec(&storage).iter() {
+        //     println!("{:?}:{:?}: {:?}", *k, *v, diffs);
+        // }
         /* XXX: is this necessary? */
         cursor.rewind_keys(&storage);
         cursor.rewind_vals(&storage);
         let vals = match key {
             Some(k) => {
                 cursor.seek_key(&storage, &k);
-                if cursor.key_valid(&storage) {
+                if !cursor.key_valid(&storage) {
                     vec![]
                 } else {
                     let mut vals = Vec::new();
-                    while cursor.val_valid(&storage) {
+                    while cursor.val_valid(&storage) && *cursor.key(&storage) == k {
                         let mut weight = 0;
                         cursor.map_times(&storage, |_, diff| weight += diff);
                         assert!(weight >= 0);
