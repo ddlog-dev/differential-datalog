@@ -566,12 +566,13 @@ ctxPHolderAllowed ctx =
     case ctx of
          CtxSetL{}        -> True
          CtxTyped{}       -> pres
-         CtxRuleRAtom{..} -> True
+         CtxRuleRAtom{}   -> True
          CtxStruct{}      -> pres
          CtxTuple{}       -> pres
          CtxMatchPat{}    -> True
          CtxBinding{}     -> True
          CtxRef{}         -> True
+         CtxIndex{}       -> True
          _                -> False
     where
     par = ctxParent ctx

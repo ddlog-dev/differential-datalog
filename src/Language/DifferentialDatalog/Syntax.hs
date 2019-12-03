@@ -488,6 +488,9 @@ instance PP Index where
     pp Index{..} = "index" <+> pp idxName <+> (parens $ commaSep $ map pp idxVars) <+>
                    "on" <+> pp idxAtom
 
+instance Show Index where
+    show = render . pp
+
 data Atom = Atom { atomPos      :: Pos
                  , atomRelation :: String
                  , atomVal      :: Expr

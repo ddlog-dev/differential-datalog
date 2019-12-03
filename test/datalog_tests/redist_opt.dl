@@ -100,12 +100,7 @@ SCCSpan(parent, tns) :-
  * same as the SCC span.
  */
 output relation Span(entity: entid_t, tns: Ref<TS.Set64<tnid_t>>)
-index SpanByEntity(entity: entid_t) on Span(entity, &TS.set_empty())
-
-index entity (x) x.entity
-index entity_tns (x) x
-
-index Span(.entity = entity, .tns = tns)
+index SpanByEntity(entity: entid_t) on Span(.entity = entity, .tns = _)
 
 Span(node, span) :- SCCSpan(scc, span), LabeledNode(node, scc).
 

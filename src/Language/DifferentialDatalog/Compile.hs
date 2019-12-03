@@ -21,7 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 -}
 
-{-# LANGUAGE RecordWildCards, FlexibleContexts, LambdaCase, TupleSections, OverloadedStrings, TemplateHaskell, QuasiQuotes, ImplicitParams #-}
+{-# LANGUAGE RecordWildCards, FlexibleContexts, LambdaCase, TupleSections, OverloadedStrings, TemplateHaskell, QuasiQuotes, ImplicitParams, NamedFieldPuns #-}
 
 {- |
 Module     : Compile
@@ -211,9 +211,17 @@ rustLibFiles specname =
 --
 -- The 'distinct' flag in 'ArrangementSet' indicates that this arrangement is used
 -- in an antijoin and therefore must contain distinct entries.
-data Arrangement = ArrangementMap { arngPattern :: Expr }
+data Arrangement = ArrangementMap { arngPattern :: Expr, arngQueryable :: Bool }
                  | ArrangementSet { arngPattern :: Expr, arngDistinct :: Bool}
                  deriving Eq
+
+arngIsQueryable :: Arrangement -> Bool
+arngIsQueryable ArrangementMap{arngQueryable} = arngQueryable
+arngIsQueryable ArrangementSet{} = False
+
+arngIsDistinct :: Arrangement -> Bool
+arngIsDistinct ArrangementMap{} = False
+arngIsDistinct ArrangementSet{arngDistinct} = arngDistinct
 
 -- Rust expression kind
 data EKind = EVal         -- normal value
@@ -350,16 +358,15 @@ addType t = modify $ \s -> s{cTypes = S.insert t $ cTypes s}
 -- * If a semijoin arrangement with the same pattern exists,
 --   promote it to a join arrangement
 -- * Otherwise, add the new arrangement
-addJoinArrangement :: String -> Expr -> CompilerMonad ()
-addJoinArrangement relname pattern = do
+addJoinArrangement :: String -> Expr -> Bool -> CompilerMonad ()
+addJoinArrangement relname pattern queryable = do
     arrs <- gets $ (M.! relname) . cArrangements
-    let join_arr = ArrangementMap pattern
-    let semijoin_idx = elemIndex (ArrangementSet pattern False) arrs
-    let arrs' = if elem join_arr arrs
-                   then arrs
-                   else maybe (arrs ++ [join_arr])
-                              (\idx -> take idx arrs ++ [join_arr] ++ drop (idx+1) arrs)
-                              semijoin_idx
+    let existing_idx = findIndex (\a -> (arngPattern a == pattern) && (arngIsDistinct a == False)) arrs
+    let queryable' = queryable || maybe False (arngIsQueryable . (arrs !!)) existing_idx
+    let join_arr = ArrangementMap pattern queryable'
+    let arrs' = maybe (arrs ++ [join_arr])
+                      (\idx -> take idx arrs ++ [join_arr] ++ drop (idx+1) arrs)
+                      existing_idx
     modify $ \s -> s{cArrangements = M.insert relname arrs' $ cArrangements s}
 
 -- Create a new arrangement for use in a semijoin operator:
@@ -368,9 +375,7 @@ addJoinArrangement relname pattern = do
 addSemijoinArrangement :: String -> Expr -> CompilerMonad ()
 addSemijoinArrangement relname pattern = do
     arrs <- gets $ (M.! relname) . cArrangements
-    let arrs' = if (elem (ArrangementSet pattern True) arrs ||
-                    elem (ArrangementSet pattern False) arrs ||
-                    elem (ArrangementMap pattern) arrs)
+    let arrs' = if isJust $ find ((==pattern) . arngPattern) arrs
                    then arrs
                    else arrs ++ [ArrangementSet pattern False]
     modify $ \s -> s{cArrangements = M.insert relname arrs' $ cArrangements s}
@@ -401,11 +406,13 @@ getSemijoinArrangement relname pattern = do
                          _                         -> False)
                        arrs
 
--- Find an arrangement of the form 'ArrangementMap pattern'
+-- Find an arrangement of the form 'ArrangementMap pattern _'
 getJoinArrangement :: String -> Expr -> CompilerMonad (Maybe Int)
 getJoinArrangement relname pattern = do
     arrs <- gets $ (M.! relname) . cArrangements
-    return $ elemIndex (ArrangementMap pattern) arrs
+    return $ findIndex (\case
+                         ArrangementMap{arngPattern} -> arngPattern == pattern
+                         _ -> False) arrs
 
 -- Find an arrangement of the form 'ArrangementSet pattern True'
 getAntijoinArrangement :: String -> Expr -> CompilerMonad (Maybe Int)
@@ -972,13 +979,26 @@ mkValType d types =
     mkdisplay t | isString d t = "Value::" <> consname t <+> "(v) => record::format_ddlog_str(v.as_ref(), f)"
                 | otherwise    = "Value::" <> consname t <+> "(v) => write!(f, \"{:?}\", *v)"
 
--- Iterate through all rules in the program; precompute the set of arrangements for each
--- relation.  This is done as a separate compiler pass to maximize arrangement sharing
--- between joins and semijoins: if a particular key is only used in a semijoin operator,
--- the it is sufficient to create a cheaper 'Arrangement.Set' for it.  If it is also used
--- in a join, then we create an 'Arrangement.Map' and share it between a join and a semijoin.
+-- Precompute the set of arrangements used by the program.  This is done as a separate
+-- compiler pass to maximize arrangement sharing: if a particular key is only used in
+-- semijoin operators, then it is sufficient to create a cheaper 'Arrangement.Set' for it.
+-- If it is also used in a join operator or an index, then we create an 'Arrangement.Map'
+-- and share it between all relevant joins, indexes, and semijoins.
 createArrangements :: DatalogProgram -> CompilerMonad ()
-createArrangements d = mapM_ (createRelArrangements d) $ progRelations d
+createArrangements d = do
+    -- Iterate through all rules in the program; precompute the set of arrangements for each
+    -- relation.
+    mapM_ (createRelArrangements d) $ progRelations d
+    -- Arrangements for all program indexes.
+    mapM_ (createIndexArrangement d) $ progIndexes d
+
+createIndexArrangement :: DatalogProgram -> Index -> CompilerMonad ()
+createIndexArrangement d idx@Index{..} = do
+    let marr = arrangeInput d idxAtom
+               $ map (\f -> (eVar $ name f, error $ "createIndexArrangement " ++ show idx ++ ": " ++ name f ++ " context should not be used")) idxVars
+    case marr of
+         Nothing -> error $ "createIndexArrangement " ++ show idx ++ ": failed to compute index arrangement."
+         Just arr -> addJoinArrangement (atomRelation idxAtom) arr True
 
 createRelArrangements :: DatalogProgram -> Relation -> CompilerMonad ()
 createRelArrangements d rel = mapM_ (createRuleArrangements d) $ relRules d $ name rel
@@ -988,7 +1008,7 @@ createRuleArrangements d rule = do
     -- Arrange the first atom in the rule if needed
     let arr = ruleArrangeFstLiteral d rule
     when (isJust arr)
-        $ addJoinArrangement (atomRelation $ rhsAtom $ head $ ruleRHS rule) $ fromJust arr
+         $ addJoinArrangement (atomRelation $ rhsAtom $ head $ ruleRHS rule) (fromJust arr) False
     mapM_ (createRuleArrangement d rule) [1..(length (ruleRHS rule) - 1)]
 
 createRuleArrangement :: DatalogProgram -> Rule -> Int -> CompilerMonad ()
@@ -1001,7 +1021,7 @@ createRuleArrangement d rule idx = do
     let is_semi = null $ ruleRHSNewVars d rule idx
     case rhs of
          RHSLiteral True _ | is_semi   -> addSemijoinArrangement (name rel) arr
-                           | otherwise -> addJoinArrangement (name rel) arr
+                           | otherwise -> addJoinArrangement (name rel) arr False
          RHSLiteral False _            -> addAntijoinArrangement (name rel) arr
          _                             -> return ()
 
@@ -1627,7 +1647,7 @@ mkAntijoin d input_filters input_val Atom{..} rl@Rule{..} ajoin_idx = do
 -- above pattern is not equivalent to 'C1{_, C2{_1,_},_0}').
 --
 -- The following two functions are used to extract patterns from rules. Consider the following
--- rule:  '... :- A(x,z,B{_,y}), C(y.f1, D{_z})'.  Given this rule we would like to generate
+-- rule:  '... :- A(x,z,B{_,y}), C(y.f1, D{z})'.  Given this rule we would like to generate
 -- arrangements of 'C' and 'A'.
 --
 -- 'normalizeArrangement' computes the former: 'C{_0, D{_1}}', along with the mapping from aux
@@ -1828,15 +1848,16 @@ mkNode (ApplyNode fun) =
     "ProgNode::Apply{tfun:" <+> fun <> "}"
 
 mkArrangement :: (?cfg::CompilerConfig) => DatalogProgram -> Relation -> Arrangement -> CompilerMonad Doc
-mkArrangement d rel (ArrangementMap pattern) = do
-    filter_key <- mkArrangementKey d rel pattern
+mkArrangement d rel ArrangementMap{..} = do
+    filter_key <- mkArrangementKey d rel arngPattern
     let afun = braces' $
                "let __cloned =" <+> vALUE_VAR <> ".clone();"                                                $$
                filter_key <> ".map(|x|(x,__cloned))"
     return $
         "Arrangement::Map{"                                                                                 $$
-        "   name: r###\"" <> pp pattern <> "\"###.to_string(),"                                             $$
-        (nest' $ "afun: &{fn __f(" <> vALUE_VAR <> ": Value) -> Option<(Value,Value)>" $$ afun $$ "__f}")   $$
+        "   name: r###\"" <> pp arngPattern <> "\"###.to_string(),"                                         $$
+        (nest' $ "afun: &{fn __f(" <> vALUE_VAR <> ": Value) -> Option<(Value,Value)>" $$ afun $$ "__f},")  $$
+        "    queryable:" <+> (if arngQueryable then "true" else "false")                                    $$
         "}"
 
 mkArrangement d rel ArrangementSet{..} = do
