@@ -1065,7 +1065,7 @@ enum Reply<V: Val> {
     // Acknowledge flush completion (sent by worker 0 only).
     FlushAck,
     // Result of a query.
-    QueryRes(Vec<V>),
+    QueryRes(Option<Vec<V>>),
 }
 
 impl<V: Val> Program<V> {
@@ -1374,7 +1374,7 @@ impl<V: Val> Program<V> {
                               .update(v.clone(), 1);
                         }
                         epoch += 1;
-                        Self::advance(&mut all_sessions, epoch);
+                        Self::advance(&mut all_sessions, &mut traces, epoch);
                         Self::flush(&mut all_sessions, &probe, worker, &peers, &frontier_ts, &progress_barrier);
                         reply_send.send(Reply::FlushAck).map_err(|e| format!("failed to send ACK: {}", e))?;
                     }
@@ -1429,7 +1429,7 @@ impl<V: Val> Program<V> {
                                     };
                                     epoch += 1;
                                     //print!("epoch: {}\n", epoch);
-                                    Self::advance(&mut sessions, epoch);
+                                    Self::advance(&mut sessions, &mut traces, epoch);
                                 },
                                 Ok(Msg::Flush) => {
                                     //println!("flushing");
@@ -1459,6 +1459,9 @@ impl<V: Val> Program<V> {
                             if time == /*0xffffffffffffffff*/TS::max_value() {
                                 return Ok(())
                             };
+                            /* `sessions` is empty, but we must advance trace frontiers, so we
+                             * don't hinder trace compaction. */
+                            Self::advance(&mut sessions, &mut traces, time);
                             while probe.less_than(&time) {
                                 if !worker.step_or_park(None) {
                                     /* Dataflow terminated. */
@@ -1565,10 +1568,22 @@ impl<V: Val> Program<V> {
     }
 
     /* Advance the epoch on all input sessions */
-    fn advance(sessions: &mut FnvHashMap<RelId, InputSession<TS, V, Weight>>, epoch: TS) {
+    fn advance<Tr>(
+        sessions: &mut FnvHashMap<RelId, InputSession<TS, V, Weight>>,
+        traces: &mut BTreeMap<ArrId, Tr>,
+        epoch: TS,
+    ) where
+        Tr: TraceReader<Key = V, Val = V, Time = TS, R = Weight>,
+        Tr::Batch: BatchReader<V, V, TS, Weight>,
+        Tr::Cursor: Cursor<V, V, TS, Weight>,
+    {
         for (_, s) in sessions.iter_mut() {
             //print!("advance\n");
             s.advance_to(epoch);
+        }
+        for (_, t) in traces.iter_mut() {
+            t.distinguish_since(&[epoch.clone()]);
+            t.advance_by(&[epoch.clone()]);
         }
     }
 
@@ -1622,12 +1637,16 @@ impl<V: Val> Program<V> {
         <Tr as TraceReader>::Batch: BatchReader<V, V, TS, Weight>,
         <Tr as TraceReader>::Cursor: Cursor<V, V, TS, Weight>,
     {
-        let trace = traces
-            .get_mut(&arrid)
-            .ok_or_else(|| {
-                eprintln!("Unknown arrangement {:?}", arrid);
-                format!("handle_query: Unknown arrangement {:?}", arrid)
-            })?;
+        let trace = match traces.get_mut(&arrid) {
+            None => {
+                reply_send
+                    .send(Reply::QueryRes(None))
+                    .map_err(|e| format!("handle_query: failed to send error response: {}", e))?;
+                return Ok(());
+            }
+            Some(trace) => trace,
+        };
+
         let (mut cursor, storage) = trace.cursor();
         // for ((k, v), diffs) in cursor.to_vec(&storage).iter() {
         //     println!("{:?}:{:?}: {:?}", *k, *v, diffs);
@@ -1672,10 +1691,8 @@ impl<V: Val> Program<V> {
             }
         };
         reply_send
-            .send(Reply::QueryRes(vals))
-            .map_err(|e| {
-                format!("handle_query: failed to send query response: {}", e)
-            })?;
+            .send(Reply::QueryRes(Some(vals)))
+            .map_err(|e| format!("handle_query: failed to send query response: {}", e))?;
         Ok(())
     }
 
@@ -2258,6 +2275,7 @@ impl<V: Val> RunningProgram<V> {
         self.broadcast(Msg::Query(arrid, k))?;
 
         let mut res: Vec<V> = vec![];
+        let mut unknown = false;
         for (worker_index, chan) in self.reply_recv.iter().enumerate() {
             let reply = chan.recv().map_err(|e| {
                 format!(
@@ -2266,7 +2284,7 @@ impl<V: Val> RunningProgram<V> {
                 )
             })?;
             match reply {
-                Reply::QueryRes(mut vals) => {
+                Reply::QueryRes(Some(mut vals)) => {
                     if !vals.is_empty() {
                         if res.is_empty() {
                             std::mem::swap(&mut res, &mut vals);
@@ -2274,6 +2292,9 @@ impl<V: Val> RunningProgram<V> {
                             res.append(&mut vals);
                         }
                     }
+                }
+                Reply::QueryRes(None) => {
+                    unknown = true;
                 }
                 repl => {
                     Err(format!(
@@ -2283,7 +2304,12 @@ impl<V: Val> RunningProgram<V> {
                 }
             }
         }
-        Ok(res)
+
+        if unknown {
+            Err(format!("query_arrangement: unknown index: {:?}", arrid))
+        } else {
+            Ok(res)
+        }
     }
 
     /* increment the counter associated with value `x` in the delta-set
