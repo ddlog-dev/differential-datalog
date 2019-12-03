@@ -151,6 +151,27 @@ impl TryFrom<RelId> for Relations {
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Indexes {
+    X = 0,
+}
+
+impl TryFrom<&str> for Indexes {
+    type Error = ();
+
+    fn try_from(_iname: &str) -> Result<Self, Self::Error> {
+        panic!("Indexes::try_from::<&str> not implemented")
+    }
+}
+
+impl TryFrom<IdxId> for Indexes {
+    type Error = ();
+
+    fn try_from(_iid: IdxId) -> Result<Self, Self::Error> {
+        panic!("Indexes::try_from::<IdxId> not implemented")
+    }
+}
+
 #[derive(Eq, Ord, Clone, Hash, PartialEq, PartialOrd, Serialize, Deserialize, Debug)]
 pub enum Value {
     empty(),
@@ -199,10 +220,6 @@ pub fn relid2cname(_rid: RelId) -> Option<&'static ffi::CStr> {
     panic!("relid2name not implemented")
 }
 
-pub fn prog(__update_cb: Box<dyn CBFn<Value>>) -> Program<Value> {
-    panic!("prog not implemented")
-}
-
 lazy_static! {
     pub static ref RELIDMAP: FnvHashMap<Relations, &'static str> = { FnvHashMap::default() };
 }
@@ -213,4 +230,20 @@ lazy_static! {
 
 lazy_static! {
     pub static ref OUTPUT_RELIDMAP: FnvHashMap<Relations, &'static str> = { FnvHashMap::default() };
+}
+
+pub fn indexid2name(_iid: IdxId) -> Option<&'static str> {
+    panic!("indexid2name not implemented")
+}
+
+pub fn indexid2cname(_iid: IdxId) -> Option<&'static ffi::CStr> {
+    panic!("indexid2cname not implemented")
+}
+
+pub fn prog(__update_cb: Box<dyn CBFn<Value>>) -> Program<Value> {
+    panic!("prog not implemented")
+}
+
+lazy_static! {
+    pub static ref IDXIDMAP: FnvHashMap<Indexes, &'static str> = { FnvHashMap::default() };
 }

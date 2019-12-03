@@ -223,8 +223,11 @@ impl<T> Val for T where
 {
 }
 
-/// Unique identifier of a datalog relation
+/// Unique identifier of a DDlog relation.
 pub type RelId = usize;
+
+/// Unique identifier of an index.
+pub type IdxId = usize;
 
 /// Unique identifier of an arranged relation.
 /// The first element of the tuple identifies relation; the second is the index

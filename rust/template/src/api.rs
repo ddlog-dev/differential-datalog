@@ -71,6 +71,18 @@ impl HDDlog {
         relid2cname(tid).ok_or_else(|| format!("unknown relation {}", tid))
     }
 
+    pub fn get_index_id(iname: &str) -> Result<Indexes, String> {
+        Indexes::try_from(iname).map_err(|()| format!("unknown index {}", iname))
+    }
+
+    pub fn get_index_name(iid: IdxId) -> Result<&'static str, String> {
+        indexid2name(iid).ok_or_else(|| format!("unknown index {}", iid))
+    }
+
+    pub fn get_index_cname(iid: IdxId) -> Result<&'static ffi::CStr, String> {
+        indexid2cname(iid).ok_or_else(|| format!("unknown index {}", iid))
+    }
+
     pub fn record_commands(&mut self, file: &mut Option<Mutex<fs::File>>) {
         mem::swap(&mut self.replay_file, file);
     }
