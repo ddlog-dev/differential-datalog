@@ -1082,14 +1082,14 @@ impl<V: Val> Program<V> {
         let (request_send, request_recv): (Vec<_>, Vec<_>) =
             (0..nworkers).map(|_| mpsc::channel::<Msg<V>>()).unzip();
         let request_recv: Arc<Mutex<Vec<Option<_>>>> = Arc::new(Mutex::new(
-            request_recv.into_iter().map(|x| Some(x)).collect(),
+            request_recv.into_iter().map(Some).collect(),
         ));
 
         /* Channels for responses from worker threads. */
         let (reply_send, reply_recv): (Vec<_>, Vec<_>) =
             (0..nworkers).map(|_| mpsc::channel::<Reply<V>>()).unzip();
         let reply_send: Arc<Mutex<Vec<Option<_>>>> = Arc::new(Mutex::new(
-            reply_send.into_iter().map(|x| Some(x)).collect(),
+            reply_send.into_iter().map(Some).collect(),
         ));
 
         /* Profiling channel */
@@ -1582,8 +1582,8 @@ impl<V: Val> Program<V> {
             s.advance_to(epoch);
         }
         for (_, t) in traces.iter_mut() {
-            t.distinguish_since(&[epoch.clone()]);
-            t.advance_by(&[epoch.clone()]);
+            t.distinguish_since(&[epoch]);
+            t.advance_by(&[epoch]);
         }
     }
 
