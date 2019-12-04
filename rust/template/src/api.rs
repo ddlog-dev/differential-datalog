@@ -271,6 +271,13 @@ impl DDlog for HDDlog {
         }
     }
 
+    fn query_index(&self, index: IdxId, key: Self::Value) -> Result<Vec<Self::Value>, String>
+    {
+        let idx = Indexes::try_from(index).map_err(|()| format!("unknown index {}", index))?;
+        let arrid = indexes2arrid(idx);
+        self.prog.lock().unwrap().query_arrangement(arrid, key)
+    }
+
     fn stop(&mut self) -> Result<(), String> {
         self.prog.lock().unwrap().stop()
     }

@@ -217,7 +217,7 @@ pub fn relid2name(_rid: RelId) -> Option<&'static str> {
 }
 
 pub fn relid2cname(_rid: RelId) -> Option<&'static ffi::CStr> {
-    panic!("relid2name not implemented")
+    panic!("relid2cname not implemented")
 }
 
 lazy_static! {
@@ -238,6 +238,10 @@ pub fn indexid2name(_iid: IdxId) -> Option<&'static str> {
 
 pub fn indexid2cname(_iid: IdxId) -> Option<&'static ffi::CStr> {
     panic!("indexid2cname not implemented")
+}
+
+pub fn indexes2arrid(idx: Indexes) -> ArrId {
+    panic!("indexes2arrid not implemented")
 }
 
 pub fn prog(__update_cb: Box<dyn CBFn<Value>>) -> Program<Value> {

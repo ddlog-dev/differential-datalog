@@ -968,12 +968,10 @@ mkIndexesTryFromStr d =
 
 mkIndexesIntoArrId :: DatalogProgram -> CompilerState -> Doc
 mkIndexesIntoArrId d CompilerState{..} =
-    "impl Into<ArrId> for Indexes {"                                      $$
-    "    fn into(self) -> ArrId {"                                        $$
-    "         match self {"                                               $$
-                  (nest' $ nest' $ vcat $ entries)                        $$
-    "         }"                                                          $$
-    "    }"                                                               $$
+    "pub fn indexes2arrid(idx: Indexes) -> ArrId {"                  $$
+    "    match idx {"                                                $$
+    (nest' $ nest' $ vcat $ entries)                                 $$
+    "    }"                                                          $$
     "}"
     where
     entries = map mkidx $ M.elems $ progIndexes d
