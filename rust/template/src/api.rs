@@ -278,6 +278,20 @@ impl DDlog for HDDlog {
         self.prog.lock().unwrap().query_arrangement(arrid, key)
     }
 
+    #[cfg(feature = "flatbuf")]
+    fn query_index_from_flatbuf(
+        &self,
+        buf: &[u8],
+        resbuf: *mut *const u8,
+        resbuf_size: *mut libc::size_t,
+        resbuf_capacity: *mut libc::size_t,
+        resbuf_offset: *mut libc::size_t,
+    ) -> Result<(), String> {
+        let (idxid, key) = flatbuf::query_from_flatbuf<'a>(buf)?;
+        let res = self.query_index(idxis, key)?;
+        
+    }
+
     fn stop(&mut self) -> Result<(), String> {
         self.prog.lock().unwrap().stop()
     }
