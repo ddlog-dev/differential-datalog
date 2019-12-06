@@ -3,8 +3,8 @@ use std::iter::Iterator;
 use std::ops::Deref;
 
 use crate::callback::Callback;
-use crate::program::RelId;
 use crate::program::IdxId;
+use crate::program::RelId;
 use crate::program::Update;
 use crate::program::Val;
 use crate::record::UpdCmd;

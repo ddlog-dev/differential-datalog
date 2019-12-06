@@ -271,18 +271,14 @@ impl DDlog for HDDlog {
         }
     }
 
-    fn query_index(&self, index: IdxId, key: Self::Value) -> Result<Vec<Self::Value>, String>
-    {
+    fn query_index(&self, index: IdxId, key: Self::Value) -> Result<Vec<Self::Value>, String> {
         let idx = Indexes::try_from(index).map_err(|()| format!("unknown index {}", index))?;
         let arrid = indexes2arrid(idx);
         self.prog.lock().unwrap().query_arrangement(arrid, key)
     }
 
     #[cfg(feature = "flatbuf")]
-    fn query_index_from_flatbuf(
-        &self,
-        buf: &[u8],
-    ) -> Result<Vec<Value>, String> {
+    fn query_index_from_flatbuf(&self, buf: &[u8]) -> Result<Vec<Value>, String> {
         let (idxid, key) = flatbuf::query_from_flatbuf(buf)?;
         self.query_index(idxid, key)
     }
@@ -764,7 +760,12 @@ pub unsafe extern "C" fn ddlog_query_index_from_flatbuf(
     resbuf_capacity: *mut libc::size_t,
     resbuf_offset: *mut libc::size_t,
 ) -> raw::c_int {
-    if prog.is_null() || resbuf.is_null() || resbuf_size.is_null() || resbuf_capacity.is_null() || resbuf_offset.is_null() {
+    if prog.is_null()
+        || resbuf.is_null()
+        || resbuf_size.is_null()
+        || resbuf_capacity.is_null()
+        || resbuf_offset.is_null()
+    {
         return -1;
     };
     let prog = Arc::from_raw(prog);
@@ -803,12 +804,12 @@ pub unsafe extern "C" fn ddlog_query_index_from_flatbuf(
         return -1;
     };
     let prog = Arc::from_raw(prog);
-    prog.eprintln("ddlog_query_index_from_flatbuf(): error: DDlog was compiled without FlatBuffers support");
+    prog.eprintln(
+        "ddlog_query_index_from_flatbuf(): error: DDlog was compiled without FlatBuffers support",
+    );
     Arc::into_raw(prog);
     -1
-
 }
- 
 
 #[no_mangle]
 pub unsafe extern "C" fn ddlog_flatbuf_free(

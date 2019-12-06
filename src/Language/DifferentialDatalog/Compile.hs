@@ -370,7 +370,7 @@ addJoinArrangement :: String -> Expr -> Maybe Index -> CompilerMonad ()
 addJoinArrangement relname pattern midx = do
     arrs <- gets $ (M.! relname) . cArrangements
     let existing_idx = findIndex (\a -> (arngPattern a == pattern) && (arngIsDistinct a == False)) arrs
-    let idxs = nub $ maybeToList midx ++ maybe [] (arngIndexes . (arrs !!)) existing_idx
+    let idxs = nub $ maybeToList midx ++ maybe [] (arngUsedInIndexes . (arrs !!)) existing_idx
     let join_arr = ArrangementMap pattern idxs
     let arrs' = maybe (arrs ++ [join_arr])
                       (\idx -> take idx arrs ++ [join_arr] ++ drop (idx+1) arrs)

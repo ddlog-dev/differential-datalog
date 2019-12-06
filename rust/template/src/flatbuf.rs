@@ -570,12 +570,13 @@ pub fn updates_to_flatbuf(delta: &DeltaMap<Value>) -> (Vec<u8>, usize) {
     fbb.collapse()
 }
 
-pub fn query_from_flatbuf<'a>(
-    buf: &'a [u8],
-) -> Response<(IdxId, Value)> {
+pub fn query_from_flatbuf<'a>(buf: &'a [u8]) -> Response<(IdxId, Value)> {
     let q = flatbuffers::get_root::<fb::__Query<'a>>(buf);
     if let Some(key) = q.key() {
-        Ok((q.idxid() as usize, Value::idxkey_from_flatbuf(q.idxid() as usize, key)?))
+        Ok((
+            q.idxid() as usize,
+            Value::idxkey_from_flatbuf(q.idxid() as usize, key)?,
+        ))
     } else {
         Err("Invalid buffer: failed to extract key".to_string())
     }
