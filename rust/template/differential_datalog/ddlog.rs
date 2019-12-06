@@ -67,6 +67,10 @@ pub trait DDlog: Debug {
     /// Query index.  Returns all values associated with the given key in the index.
     fn query_index(&self, index: IdxId, key: Self::Value) -> Result<Vec<Self::Value>, String>;
 
+    /// Similar to `query_index`, but extracts query from a flatbuffer.
+    #[cfg(feature = "flatbuf")]
+    fn query_index_from_flatbuf(&self, buf: &[u8]) -> Result<Vec<Self::Value>, String>;
+
     /// Stop the program.
     fn stop(&mut self) -> Result<(), String>;
 }

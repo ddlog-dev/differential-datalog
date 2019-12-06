@@ -468,7 +468,7 @@ impl<'a> FromFlatBuffer<fb::__Command<'a>> for Update<Value> {
         let val_table = cmd.val().ok_or_else(|| {
             format!("Update::from_flatbuf: invalid buffer: failed to extract value")
         })?;
-        let val = Value::from_flatbuf(cmd.val_type(), val_table)?;
+        let val = Value::relval_from_flatbuf(relid, val_table)?;
         match cmd.kind() {
             fb::__CommandKind::Insert => Ok(Update::Insert { relid, v: val }),
             fb::__CommandKind::Delete => Ok(Update::DeleteValue { relid, v: val }),
@@ -573,9 +573,9 @@ pub fn updates_to_flatbuf(delta: &DeltaMap<Value>) -> (Vec<u8>, usize) {
 pub fn query_from_flatbuf<'a>(
     buf: &'a [u8],
 ) -> Response<(IdxId, Value)> {
-    let q = fb::get_root_as___query(buf);
+    let q = flatbuffers::get_root::<fb::__Query<'a>>(buf);
     if let Some(key) = q.key() {
-        Ok(q.idxid(), Value::from_flatbuf(key))
+        Ok((q.idxid() as usize, Value::idxkey_from_flatbuf(q.idxid() as usize, key)?))
     } else {
         Err("Invalid buffer: failed to extract key".to_string())
     }
@@ -600,7 +600,7 @@ pub fn values_to_flatbuf(vals: &Vec<Value>) -> (Vec<u8>, usize) {
         },
     );
 
-    fb::finish___commands_buffer(&mut fbb, vals_table);
+    fbb.finish(vals_table, None);
     fbb.collapse()
 }
 

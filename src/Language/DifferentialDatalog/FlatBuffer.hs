@@ -60,6 +60,7 @@ import Language.DifferentialDatalog.Pos
 import Language.DifferentialDatalog.Name
 import Language.DifferentialDatalog.NS
 import Language.DifferentialDatalog.Relation
+import Language.DifferentialDatalog.Index
 import {-# SOURCE #-} qualified Language.DifferentialDatalog.Compile as R -- "R" for "Rust"
 
 compileFlatBufferBindings :: (?cfg::R.CompilerConfig) => DatalogProgram -> String -> FilePath -> IO ()
@@ -136,13 +137,14 @@ compileFlatBufferSchema d prog_name =
     "union __Value"                                                             $$
     (braces' $ vcommaSep $ nub $ map typeTableName progValTypes)                $$
     ""                                                                          $$
-    "table __ValueTable {"
-    "    v: __Value;"
-    "}"
-    ""
-    "table __Values {"
-    "    ;"
-    "}"
+    "table __ValueTable {"                                                      $$
+    "    v: __Value;"                                                           $$
+    "}"                                                                         $$
+    ""                                                                          $$
+    "table __Values {"                                                          $$
+    "    values: [__ValueTable];"                                               $$
+    "}"                                                                         $$
+    ""                                                                          $$
     "// Query DDlog index"                                                      $$
     "table __Query {"                                                           $$
     "    idxid: uint64;"                                                        $$
@@ -344,7 +346,7 @@ progValTypes =
     
 progIndexKeyTypes :: (?d::DatalogProgram) => [Type]
 progIndexKeyTypes =
-    nub $ map (typeNormalizeForFlatBuf . tTuple . map typ . idxVars) $ progIndexes ?d
+    nub $ map (typeNormalizeForFlatBuf . idxKeyType) $ M.elems $ progIndexes ?d
 
 progIORelations :: (?d::DatalogProgram) => [Relation]
 progIORelations =
@@ -995,13 +997,13 @@ mkJavaQuery = ("ddlog" </> ?prog_name </> queryClass <.> "java",
     "import ddlogapi.DDlogException;"                                   $$
     "import com.google.flatbuffers.*;"                                  $$
     "public class" <+> pp queryClass                                    $$
-    (braces' $ (vcat $ map mk_query $ M.elems $ progIndexes ?d))
+    (braces' $ (vcat $ map mk_query $ M.elems $ progIndexes ?d)))
     where
     mk_query idx@Index{..} =
         "public static ... query" <> mkIdxId idx <>
             (parens $ commaSep 
              $ "DDlogAPI hddlog" :
-               map (\v -> jConvTypeW v <+> pp (name v)) idxVars
+               (map (\v -> jConvTypeW v <+> pp (name v)) idxVars)
                ++ ["java.util.function.Consumer<" <> jConvTypeR (idxRelation ?d idx) <> "> callback"]) <>
             "throws DDlogException" $$
         (braces' $
@@ -1009,7 +1011,7 @@ mkJavaQuery = ("ddlog" </> ?prog_name </> queryClass <.> "java",
             -- Create query.
             "int query =" <+> jFBCallConstructor "__Query" 
                               [ (pp $ idxIdentifier ?d idx)
-                              , jFBPackage <> ".__Value." <> typeTableName idxType
+                              , jFBPackage <> ".__Value." <> typeTableName idx_type
                               , val ] <> ";"                                        $$
             -- Seal the buffer.
             "fbbuilder.finish(query);"                                              $$
@@ -1018,13 +1020,18 @@ mkJavaQuery = ("ddlog" </> ?prog_name </> queryClass <.> "java",
             "hddlog.queryIndexFromFlatBuf(fbbuilder.dataBuffer(), resfb);"          $$
             -- deserialize response
             "try {"                                                                 $$
+            "    vals =" <+> jFBPackage <> ".__Values.getRootAs__Values(bb);"       $$
+            "    len =  vals.valuesLength();"                                       $$
+            "    for (int i = 0; i < len; i++) {"                                   $$
+            "        callback.accept(new" <+> jConvTypeR (idxRelation ?d idx) <> "(vals.values(i));"            $$
+            "    }"                                                                 $$
             "} finally { hddlog.flatbufFree(resfb); }"
         )
         where 
+        idx_type = tTuple $ map typ $ idxVars
         val = case idxVars of
-                   [v] -> jConv2FBType FBUnion (name v) (typ v)
-                   vs  -> let t = tTuple $ map typ vs
-                              table = typeTableName t in
+                   [v] -> jConv2FBType FBUnion (pp $ name v) (typ v)
+                   vs  -> let table = typeTableName idx_type in
                           jFBCallConstructor table
                                              (mapIdx (\v i -> jConv2FBType (FBField table ("a" ++ show i)) (pp $ name v) (typ v)) vs)
 
@@ -1302,10 +1309,16 @@ jReadField nesting fbctx e t =
 rustValueFromFlatbuf :: (?d::DatalogProgram, ?cfg::R.CompilerConfig) => Doc
 rustValueFromFlatbuf =
     "impl Value {"                                                                                  $$
-    "    fn from_flatbuf(valenum: fb::__Value, v: fbrt::Table) -> Response<Self> {"                 $$
-    "        match valenum {"                                                                       $$
-    (nest' $ nest' $ nest' $ vcat enums)                                                            $$
-    "            _ => Err(format!(\"Value::from_flatbuf: invalid relation id {}\", relid))"         $$
+    "    fn relval_from_flatbuf(relid: RelId, v: fbrt::Table) -> Response<Self> {"                  $$
+    "        match relid {"                                                                         $$
+    (nest' $ nest' $ nest' $ vcat rel_enums)                                                        $$
+    "            _ => Err(format!(\"Value::relval_from_flatbuf: invalid relid {}\", relid))"        $$
+    "        }"                                                                                     $$
+    "    }"                                                                                         $$
+    "    fn idxkey_from_flatbuf(idxid: IdxId, v: fbrt::Table) -> Response<Self> {"                  $$
+    "        match idxid {"                                                                         $$
+    (nest' $ nest' $ nest' $ vcat idx_enums)                                                        $$
+    "            _ => Err(format!(\"Value::idxkey_from_flatbuf: invalid idxid {}\", idxid))"        $$
     "        }"                                                                                     $$
     "    }"                                                                                         $$
     "}"                                                                                             $$
@@ -1323,27 +1336,32 @@ rustValueFromFlatbuf =
     "    fn to_flatbuf_table(&self, fbb: &mut fbrt::FlatBufferBuilder<'b>) -> fbrt::WIPOffset<Self::Target> {"  $$
     "        let (v_type, v) = self.to_flatbuf(fbb);"                                               $$
     "        let v = Some(v);"                                                                      $$
-    "        fb::__ValueTable::create(fbb, &fb::__ValueTableArgs{v_type, v});"                      $$
+    "        fb::__ValueTable::create(fbb, &fb::__ValueTableArgs{v_type, v})"                       $$
     "    }"                                                                                         $$
     "}"                                                                                             $$
     "impl <'b> ToFlatBufferVectorElement<'b> for Value {"                                           $$
-    "    type Target = fbrt::WIPOffset<__ValueTable<'b>>;"                                          $$
+    "    type Target = fbrt::WIPOffset<fb::__ValueTable<'b>>;"                                      $$
     "    fn to_flatbuf_vector_element(&self, fbb: &mut fbrt::FlatBufferBuilder<'b>) -> Self::Target {" $$
-    "        self.to_flatbuf(fbb)"                                                                  $$
+    "        self.to_flatbuf_table(fbb)"                                                            $$
     "    }"                                                                                         $$
     "}"
     where
-    enums = map (\t ->
-                 "fb::__Value::" <> typeTableName t <+> "=> Ok(" <>
-                     R.mkValue ?d ("<" <> R.mkType t <> ">::from_flatbuf(fb::" <> typeTableName t <> "::init_from_table(v))?")
-                               relType <> "),")
-                progValTypes
+    rel_enums = map (\rel@Relation{..} ->
+                     pp (relIdentifier ?d rel) <+> "=> Ok(" <>
+                         R.mkValue ?d ("<" <> R.mkType relType <> ">::from_flatbuf(fb::" <> typeTableName relType <> "::init_from_table(v))?")
+                                   relType <> "),")
+                    progIORelations
+    idx_enums = map (\idx@Index{..} ->
+                     let t = idxKeyType idx in
+                     pp (idxIdentifier ?d idx) <+> "=> Ok(" <>
+                         R.mkValue ?d ("<" <> R.mkType t <> ">::from_flatbuf(fb::" <> typeTableName t <> "::init_from_table(v))?") t <> "),")
+                    $ M.elems $ progIndexes ?d
     to_enums = map (\t ->
                     "Value::" <> R.mkValConstructorName ?d t <> "(v) => {"                                   $$
                     "    (fb::__Value::" <> typeTableName t <> ", v.to_flatbuf_table(fbb).as_union_value())" $$
                     "},")
                    $ nubBy (\t1 t2 -> R.mkValConstructorName ?d t1 == R.mkValConstructorName ?d t2)
-                   progValTypes
+                   $ map relType progIORelations ++ map idxKeyType (M.elems $ progIndexes ?d)
 
 -- Deserialize struct with unique constructor.  Such structs are stored in
 -- tables.
