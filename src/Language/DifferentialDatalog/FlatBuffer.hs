@@ -560,11 +560,11 @@ typeNormalizeForFlatBuf x =
 jFBCallConstructor :: (?prog_name::String) => Doc -> [Doc] -> Doc
 jFBCallConstructor table [] =
     "((java.util.function.Supplier<Integer>) (() -> " $$
-    (braces' $ jFBPackage <> "." <> table <> ".start" <> table <> "(this.fbbuilder);"            $$
-              "return Integer.valueOf(" <+> jFBPackage <> "." <> table <> ".end" <> table <> "(this.fbbuilder));") <> ")).get()"
+    (braces' $ jFBPackage <> "." <> table <> ".start" <> table <> "(fbbuilder);"            $$
+              "return Integer.valueOf(" <+> jFBPackage <> "." <> table <> ".end" <> table <> "(fbbuilder));") <> ")).get()"
 jFBCallConstructor table args =
     jFBPackage <> "." <> table <> ".create" <> table <>
-           (parens $ commaSep $ "this.fbbuilder" : args)
+           (parens $ commaSep $ "fbbuilder" : args)
 
 {- Java convenience API. -}
 
@@ -1000,34 +1000,35 @@ mkJavaQuery = ("ddlog" </> ?prog_name </> queryClass <.> "java",
     (braces' $ (vcat $ map mk_query $ M.elems $ progIndexes ?d)))
     where
     mk_query idx@Index{..} =
-        "public static ... query" <> mkIdxId idx <>
+        "public static void query" <> mkIdxId idx <>
             (parens $ commaSep 
              $ "DDlogAPI hddlog" :
                (map (\v -> jConvTypeW v <+> pp (name v)) idxVars)
-               ++ ["java.util.function.Consumer<" <> jConvTypeR (idxRelation ?d idx) <> "> callback"]) <>
+               ++ ["java.util.function.Consumer<" <> jConvTypeR rel <> "> callback"]) <>
             "throws DDlogException" $$
         (braces' $
-            "FlatBufferBuilder fbbuilder = new FlatBufferBuilder();"                $$
+            "FlatBufferBuilder fbbuilder = new FlatBufferBuilder();"                                                $$
             -- Create query.
             "int query =" <+> jFBCallConstructor "__Query" 
                               [ (pp $ idxIdentifier ?d idx)
                               , jFBPackage <> ".__Value." <> typeTableName idx_type
-                              , val ] <> ";"                                        $$
+                              , val ] <> ";"                                                                        $$
             -- Seal the buffer.
-            "fbbuilder.finish(query);"                                              $$
+            "fbbuilder.finish(query);"                                                                              $$
             -- Call ddlog_query.
-            "DDlogAPI.FlatBufDescr resfb = new DDlogAPI.FlatBufDescr();"            $$
-            "hddlog.queryIndexFromFlatBuf(fbbuilder.dataBuffer(), resfb);"          $$
+            "DDlogAPI.FlatBufDescr resfb = new DDlogAPI.FlatBufDescr();"                                            $$
+            "hddlog.queryIndexFromFlatBuf(fbbuilder.dataBuffer(), resfb);"                                          $$
             -- deserialize response
-            "try {"                                                                 $$
-            "    vals =" <+> jFBPackage <> ".__Values.getRootAs__Values(bb);"       $$
-            "    len =  vals.valuesLength();"                                       $$
-            "    for (int i = 0; i < len; i++) {"                                   $$
-            "        callback.accept(new" <+> jConvTypeR (idxRelation ?d idx) <> "(vals.values(i));"            $$
-            "    }"                                                                 $$
+            "try {"                                                                                                 $$
+            "    " <> jFBPackage <> ".__Values vals =" <+> jFBPackage <> ".__Values.getRootAs__Values(resfb.buf);"  $$
+            "    int len = vals.valuesLength();"                                                                    $$
+            "    for (int i = 0; i < len; i++) {"                                                                   $$
+            "        callback.accept(new" <+> jConvTypeR rel <> "((" <> jFBReadType rel <> ")vals.values(i).v(new" <+> jFBReadType rel <> "())));" $$
+            "    }"                                                                                                 $$
             "} finally { hddlog.flatbufFree(resfb); }"
         )
         where 
+        rel = idxRelation ?d idx
         idx_type = tTuple $ map typ $ idxVars
         val = case idxVars of
                    [v] -> jConv2FBType FBUnion (pp $ name v) (typ v)
