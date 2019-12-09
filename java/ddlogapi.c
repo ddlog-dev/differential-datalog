@@ -412,7 +412,7 @@ JNIEXPORT void JNICALL Java_ddlogapi_DDlogAPI_ddlog_1apply_1updates_1from_1flatb
     size_t size = (*env)->GetArrayLength(env, bytes);
 
     if (ddlog_apply_updates_from_flatbuf(
-        (ddlog_prog)progHandle, ((const unsigned char *) buf) + position, size, ) < 0) {
+        (ddlog_prog)progHandle, ((const unsigned char *) buf) + position, size) < 0) {
         throwDDlogException(env, NULL);
     };
 

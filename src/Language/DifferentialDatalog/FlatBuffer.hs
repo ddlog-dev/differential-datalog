@@ -1023,7 +1023,8 @@ mkJavaQuery = ("ddlog" </> ?prog_name </> queryClass <.> "java",
             "    " <> jFBPackage <> ".__Values vals =" <+> jFBPackage <> ".__Values.getRootAs__Values(resfb.buf);"  $$
             "    int len = vals.valuesLength();"                                                                    $$
             "    for (int i = 0; i < len; i++) {"                                                                   $$
-            "        callback.accept(new" <+> jConvTypeR rel <> "((" <> jFBReadType rel <> ")vals.values(i).v(new" <+> jFBReadType rel <> "())));" $$
+            "        callback.accept(new" <+> jConvTypeR rel <> "((" <> jFBReadType rel <> ")vals" <>
+                        ".values(i).v(new" <+> jFBReadType rel <> "())));"                                          $$
             "    }"                                                                                                 $$
             "} finally { hddlog.flatbufFree(resfb); }"
         )
