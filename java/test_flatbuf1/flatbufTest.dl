@@ -1,19 +1,50 @@
 import intern
 
 input relation BI(b: bool)
+index BI_by_b(b: bool) on BI(b)
+
 input relation CI(c: bit<32>)
+index CI_by_c(c: bit<32>) on CI(c)
+
 input relation DI(d: signed<16>)
+index DI_by_d(d: signed<16>) on DI(d)
+index DI_by_none() on DI()
+
 input relation EI(e: bigint)
+index EI_by_e(e: bigint) on EI(e)
+
 output relation EO(e: bigint)
+index EO_by_e(e: bigint) on EO(e)
+
 input relation FI(s: string)
+index FI_by_s(s: string) on FI(s)
+
 input relation GI(d: bit<64>)
+index GI_by_d(d: bit<64>) on GI(d)
+
 input relation HI(d: bit<128>)
+index HI_by_d(d: bit<128>) on HI(d)
+
 input relation II(d: bit<12>)
+index II_by_d(d: bit<12>) on II(d)
+
 typedef tuple = (bool, bit<8>, string)
 input relation JI(a: (bool, bit<8>, string))
+index JI_by_0(x: bool) on JI((x,_,_))
+index JI_by_1(x: bit<8>) on JI((_,x,_))
+index JI_by_2(x: string) on JI((_,_,x))
+index JI_by_01(x: bool, y: bit<8>) on JI((x,y,_))
+index JI_by_02(x: bool, y: string) on JI((x,_,y))
+index JI_by_12(x: bit<8>, y: string) on JI((_,x,y))
+index JI_by_012(x: bool, y: bit<8>, z: string) on JI((x,y,z))
+index JI_by_all(x: tuple) on JI(x)
+index JI_by_self(x: JI) on JI[x]
+index JI_by_10(y: bit<8>, x: bool) on JI((x,y,_))
+
 input relation KI(t: tuple)
 input relation LI[tuple]
 input relation L0I(a: bool, b: bit<8>, s: string) primary key (x) x.a
+index L0I_by_a(a: bool) on L0I(.a = a)
 input relation MI(v: Vec<bool>)
 input relation NI(v: Vec<tuple>)
 input relation OI(v: Vec<Vec<bool>>)
