@@ -558,7 +558,7 @@ exprValidate1 d tvs _ (ETyped _ _ t)      = typeValidate d tvs t
 exprValidate1 d tvs _ (EAs _ _ t)         = typeValidate d tvs t
 exprValidate1 _ _ ctx (ERef p _)          =
     -- Rust does not allow pattern matching inside 'Arc'
-    check (ctxInRuleRHSPattern ctx) p "Dereference pattern not allowed in this context"
+    check (ctxInRuleRHSPattern ctx || ctxInIndex ctx) p "Dereference pattern not allowed in this context"
 
 -- True if a placeholder ("_") can appear in this context
 ctxPHolderAllowed :: ECtx -> Bool
