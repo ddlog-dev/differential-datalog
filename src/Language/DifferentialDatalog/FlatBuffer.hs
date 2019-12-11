@@ -1319,7 +1319,7 @@ jReadField nesting fbctx e t =
                               vlen = "len" <> pp nesting
                               vlst = "lst" <> pp nesting
                               vi   = "i"   <> pp nesting
-                              _vi  = "_i"   <> pp nesting
+                              _vi  = "_i"  <> pp nesting
                               vx   = "x"   <> pp nesting in
                           "((java.util.function.Supplier<" <> ltype <> ">) (() ->"                                          $$
                           (braces' $ "int" <+> vlen <+> "=" <+> e' <> "Length();"                                           $$
