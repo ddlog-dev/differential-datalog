@@ -80,13 +80,11 @@ reservedNames = ["as",
                  "if",
                  "import",
                  "in",
-                 "index",
                  "mut",
                  "input",
                  "output",
                  "bigint",
                  "not",
-                 "on",
                  "or",
                  "relation",
                  "signed",
@@ -309,8 +307,8 @@ hotypeSpec = withPos $ (HOTypeRelation nopos <$ reserved "relation" <*> (bracket
                        <|>
                        (HOTypeFunction nopos <$ reserved "function" <*> (parens $ commaSep farg) <*> (colon *> typeSpecSimple))
 
-index = withPos $ Index nopos <$ reserved "index" <*> indexIdent <*> parens (commaSep arg) <*>
-                  (reserved "on" *> atom False)
+index = withPos $ Index nopos <$ symbol "index" <*> indexIdent <*> parens (commaSep arg) <*>
+                  (symbol "on" *> atom False)
 
 relation = do
     role <-  RelInput    <$ reserved "input" <* reserved "relation"
