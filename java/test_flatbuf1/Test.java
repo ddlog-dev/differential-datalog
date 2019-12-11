@@ -130,6 +130,16 @@ public class Test {
         return "{" + String.join(", ", strings) + "}";
     }
 
+    private String printZI12(Tuple4__string__bigint__std_Vec_bigint____bit_16___Many_Reader v) {
+        return "(\"" + v.a0() + "\", " + v.a1() +
+                ", " + v.a2() + ", ("  + v.a3().a0() + ", " + printMany(v.a3().a1()) + "))";
+    }
+
+    private String printZI13(Generic___bool__bit_8___string___ManyReader v) {
+        return "Generic{\"" + v.f0() +
+            "\"," + printTuple(v.f1()) + "," + printMany(v.f2()) + "}";
+    }
+
     // typedef Many = A{x: string}
     //              | B{b: bool}
     //              | D{t: tuple}
@@ -453,18 +463,14 @@ public class Test {
             }
             // output relation OZI12[(string, bigint, Vec<bigint>, (bit<16>, Many))]
             case flatbufTestRelation.OZI12: {
-                Tuple4__string__bigint__std_Vec_bigint____bit_16___Many_Reader v =
-                    (Tuple4__string__bigint__std_Vec_bigint____bit_16___Many_Reader)command.value();
-                fb_file.println("From " + relid + " " + command.kind() + " (\"" + v.a0() + "\", " + v.a1() +
-                        ", " + v.a2() + ", ("  + v.a3().a0() + ", " + printMany(v.a3().a1()) + "))");
+                fb_file.println("From " + relid + " " + command.kind() + " " +
+                        printZI12((Tuple4__string__bigint__std_Vec_bigint____bit_16___Many_Reader)command.value()));
                 break;
             }
             // output relation OZI13[Generic<Ref<tuple>, Many>]
             case flatbufTestRelation.OZI13: {
-                Generic___bool__bit_8___string___ManyReader v =
-                    (Generic___bool__bit_8___string___ManyReader)command.value();
-                fb_file.println("From " + relid + " " + command.kind() + " Generic{\"" + v.f0() +
-                        "\"," + printTuple(v.f1()) + "," + printMany(v.f2()) + "}");
+                fb_file.println("From " + relid + " " + command.kind() + " " +
+                        printZI13((Generic___bool__bit_8___string___ManyReader)command.value()));
                 break;
             }
             // output relation OZI(d: bit<256>)
@@ -1174,7 +1180,7 @@ public class Test {
                 v -> { fb_file.println(printYI(v)); });
 
         fb_file.println("Query ZI_by_d[0]:");
-        flatbufTestQuery.queryZI_by_d(this.api, new BigInteger("0", 10),
+        flatbufTestQuery.queryZI_by_d(this.api, BigInteger.valueOf(0),
                 v -> { fb_file.println("HI{" + v.d() + "}"); });
 
         fb_file.println("Query ZI0_by_self[\"Привіт!\"]:");
@@ -1270,6 +1276,109 @@ public class Test {
                     return map;
                 },
                 v -> { fb_file.println(printZI11(v)); });
+
+        fb_file.println("Query ZI12_by_self[..]:");
+        flatbufTestQuery.queryZI12_by_self(this.api,
+                bldr -> {
+                    ArrayList<BigInteger> ints = new ArrayList<BigInteger>();
+                    ints.add(BigInteger.valueOf(0));
+                    ints.add(BigInteger.valueOf(0));
+                    ints.add(BigInteger.valueOf(1));
+                    return bldr.create_Tuple4__string__bigint__std_Vec_bigint____bit_16___Many_(
+                            "ZI12",
+                            BigInteger.valueOf(1000000),
+                            ints,
+                            bldr.create_Tuple2__bit_16___Many(0x10,
+                                bldr.create_D(bldr.create_Tuple3__bool__bit_8___string(false, (byte)2, "string"))));
+                },
+                v -> { fb_file.println(printZI12(v)); });
+        fb_file.println("Query ZI12_by_0[\"ZI12\"]:");
+        flatbufTestQuery.queryZI12_by_0(this.api, "ZI12",
+                v -> { fb_file.println(printZI12(v)); });
+        fb_file.println("Query ZI12_by_1[1000000]:");
+        flatbufTestQuery.queryZI12_by_1(this.api, BigInteger.valueOf(1000000),
+                v -> { fb_file.println(printZI12(v)); });
+        fb_file.println("Query ZI12_by_2[0,0,1]:");
+        {
+            ArrayList<BigInteger> ints = new ArrayList<BigInteger>();
+            ints.add(BigInteger.valueOf(0));
+            ints.add(BigInteger.valueOf(0));
+            ints.add(BigInteger.valueOf(1));
+            flatbufTestQuery.queryZI12_by_2(this.api, ints,
+                    v -> { fb_file.println(printZI12(v)); });
+        }
+        fb_file.println("Query ZI12_by_3[...]:");
+        flatbufTestQuery.queryZI12_by_3(this.api,
+                bldr -> {
+                    return bldr.create_Tuple2__bit_16___Many(0x10,
+                            bldr.create_D(bldr.create_Tuple3__bool__bit_8___string(false, (byte)2, "string")));
+                },
+                v -> { fb_file.println(printZI12(v)); });
+        fb_file.println("Query ZI12_by_30[0x10]:");
+        flatbufTestQuery.queryZI12_by_30(this.api, 0x10,
+                v -> { fb_file.println(printZI12(v)); });
+        fb_file.println("Query ZI12_by_31[...]:");
+        flatbufTestQuery.queryZI12_by_31(this.api,
+                bldr -> {
+                    return bldr.create_D(bldr.create_Tuple3__bool__bit_8___string(false, (byte)2, "string"));
+                },
+                v -> { fb_file.println(printZI12(v)); });
+
+        fb_file.println("Query ZI13_by_f0[...]:");
+        flatbufTestQuery.queryZI13_by_f0(this.api, "ZI13",
+                v -> { fb_file.println(printZI13(v)); });
+        fb_file.println("Query ZI13_by_f1[...]:");
+        flatbufTestQuery.queryZI13_by_f1(this.api,
+                bldr -> {
+                    return bldr.create_Tuple3__bool__bit_8___string(false, (byte)2, "string");
+                },
+                v -> { fb_file.println(printZI13(v)); });
+        fb_file.println("Query ZI13_by_f2[...]:");
+        flatbufTestQuery.queryZI13_by_f2(this.api,
+                bldr -> {
+                    return bldr.create_A("ZI13");
+                },
+                v -> { fb_file.println(printZI13(v)); });
+        fb_file.println("Query ZI13_by_t2[...]:");
+        flatbufTestQuery.queryZI13_by_t2(this.api, "ZI13",
+                v -> { fb_file.println(printZI13(v)); });
+
+        fb_file.println("Query ZI14_by_self[...]:");
+        flatbufTestQuery.queryZI14_by_self(this.api,
+                bldr -> {
+                    return bldr.create_First__string__signed_32_("string");
+                },
+                v -> { fb_file.println(printCases("ZI14", v.c())); });
+        fb_file.println("Query ZI14_by_a[\"string\"]:");
+        flatbufTestQuery.queryZI14_by_a(this.api, "string",
+                v -> { fb_file.println(printCases("ZI14", v.c())); });
+        fb_file.println("Query ZI14_by_b[5]:");
+        flatbufTestQuery.queryZI14_by_b(this.api, 5,
+                v -> { fb_file.println(printCases("ZI14", v.c())); });
+
+        fb_file.println("Query ZI15_by_a[\"Or_string\"]:");
+        flatbufTestQuery.queryZI15_by_a(this.api, "Or_string",
+                v -> { fb_file.println(printOr("ZI15", v.c())); });
+
+        fb_file.println("Query module_ZI16_by_x[\"zi16\"]:");
+        flatbufTestQuery.querymodule_ZI16_by_x(this.api, "zi16",
+                v -> { fb_file.println("module_ZI16{\"" + v.x() + "\"}"); });
+
+        fb_file.println("Query module_ZI18_by_0[-1]:");
+        flatbufTestQuery.queryZI18_by_0(this.api, -1,
+                v -> { fb_file.println("module_ZI18{" + printMTuple(v.t()) + "}"); });
+
+        fb_file.println("Query module_ZI19_by_1[\"zi19\"]:");
+        flatbufTestQuery.querymodule_ZI19_by_1(this.api, "zi19",
+                v -> { fb_file.println(printMTuple(v)); });
+
+        fb_file.println("Query ZI20_by_0[-2]:");
+        flatbufTestQuery.queryZI20_by_0(this.api, -2,
+                v -> { fb_file.println("ZI20{" + printMTuple(v.t()) + "}"); });
+
+        fb_file.println("Query ZI21_by_m[13]:");
+        flatbufTestQuery.queryZI21_by_m(this.api, 13,
+                v -> { fb_file.println("ZI21{" + v.m() + "}"); });
 
         this.fb_file.close();
     }
