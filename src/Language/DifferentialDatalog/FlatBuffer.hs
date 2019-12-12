@@ -1437,7 +1437,9 @@ rustValueFromFlatbuf =
                     "    (fb::__Value::" <> typeTableName t <> ", v.to_flatbuf_table(fbb).as_union_value())" $$
                     "},")
                    $ nubBy (\t1 t2 -> R.mkValConstructorName ?d t1 == R.mkValConstructorName ?d t2)
-                   $ map relType progIORelations ++ map idxKeyType (M.elems $ progIndexes ?d)
+                   $ map relType progIORelations ++
+                     map idxKeyType (M.elems $ progIndexes ?d) ++
+                     map (relType . idxRelation ?d) (M.elems $ progIndexes ?d)
 
 -- Deserialize struct with unique constructor.  Such structs are stored in
 -- tables.
