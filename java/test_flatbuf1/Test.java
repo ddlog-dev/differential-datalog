@@ -1382,6 +1382,397 @@ public class Test {
         flatbufTestQuery.queryZI21_by_m(this.api, 13,
                 v -> { query_file.println("ZI21{" + v.m() + "}"); });
 
+
+
+        /* Dump everything. */
+        query_file.println("Dump CI_by_c:");
+        flatbufTestQuery.dumpCI_by_c(this.api, v -> {
+            query_file.println("CI{" + v.c() + "}");
+        });
+
+        query_file.println("Dump DI_by_d:");
+        flatbufTestQuery.dumpDI_by_d(this.api, v -> {
+            query_file.println("DI{" + v.d() + "}");
+        });
+        query_file.println("Dump DI_by_none:");
+        flatbufTestQuery.dumpDI_by_none(this.api, v -> {
+            query_file.println("DI{" + v.d() + "}");
+        });
+
+        query_file.println("Dump EI_by_e:");
+        flatbufTestQuery.dumpEI_by_e(this.api, v -> {
+            query_file.println("EI{" + v.e() + "}");
+        });
+        query_file.println("Dump EO_by_e:");
+        flatbufTestQuery.dumpEO_by_e(this.api, v -> {
+            query_file.println("EO{" + v.e() + "}");
+        });
+
+        query_file.println("Dump FI_by_s:");
+        flatbufTestQuery.dumpFI_by_s(this.api, v -> {
+            query_file.println("FI{\"" + v.s() + "\"}");
+        });
+
+        query_file.println("Dump GI_by_d:");
+        flatbufTestQuery.dumpGI_by_d(this.api, v -> {
+            query_file.println("GI{" + v.d() + "}");
+        });
+
+        query_file.println("Dump HI_by_d:");
+        flatbufTestQuery.dumpHI_by_d(this.api,  v -> {
+            query_file.println("HI{" + v.d() + "}");
+        });
+
+        query_file.println("Dump II_by_d:");
+        flatbufTestQuery.dumpII_by_d(this.api, v -> {
+            query_file.println("II{" + v.d() + "}");
+        });
+
+        query_file.println("Dump JI_by_0:");
+        flatbufTestQuery.dumpJI_by_0(this.api,  v -> {
+            query_file.println("JI{" + printTuple(v.a()) + "}");
+        });
+        query_file.println("Dump JI_by_1:");
+        flatbufTestQuery.dumpJI_by_1(this.api, v -> {
+            query_file.println("JI{" + printTuple(v.a()) + "}");
+        });
+        query_file.println("Dump JI_by_2:");
+        flatbufTestQuery.dumpJI_by_2(this.api, v -> {
+            query_file.println("JI{" + printTuple(v.a()) + "}");
+        });
+        query_file.println("Dump JI_by_01:");
+        flatbufTestQuery.dumpJI_by_01(this.api, v -> {
+            query_file.println("JI{" + printTuple(v.a()) + "}");
+        });
+        query_file.println("Dump JI_by_02:");
+        flatbufTestQuery.dumpJI_by_02(this.api, v -> {
+            query_file.println("JI{" + printTuple(v.a()) + "}");
+        });
+        query_file.println("Dump JI_by_12:");
+        flatbufTestQuery.dumpJI_by_12(this.api, v -> {
+            query_file.println("JI{" + printTuple(v.a()) + "}");
+        });
+        query_file.println("Dump JI_by_012:");
+        flatbufTestQuery.dumpJI_by_012(this.api, v -> {
+            query_file.println("JI{" + printTuple(v.a()) + "}");
+        });
+        query_file.println("Dump JI_by_all:");
+        flatbufTestQuery.dumpJI_by_all(this.api,
+                v -> {
+                    query_file.println("JI{" + printTuple(v.a()) + "}");
+                });
+        query_file.println("Dump JI_by_self:");
+        flatbufTestQuery.dumpJI_by_self(this.api,
+                v -> {
+                    query_file.println("JI{" + printTuple(v.a()) + "}");
+                });
+        query_file.println("Dump JI_by_10:");
+        flatbufTestQuery.dumpJI_by_10(this.api, v -> {
+            query_file.println("JI{" + printTuple(v.a()) + "}");
+        });
+
+        query_file.println("Dump KI_by_01:");
+        flatbufTestQuery.dumpKI_by_01(this.api, v -> {
+            query_file.println("KI{" + printTuple(v.t()) + "}");
+        });
+        query_file.println("Dump KI_by_all:");
+        flatbufTestQuery.dumpKI_by_all(this.api,
+                v -> {
+                    query_file.println("KI{" + printTuple(v.t()) + "}");
+                });
+
+        query_file.println("Dump LI_by_01:");
+        flatbufTestQuery.dumpLI_by_01(this.api, v -> {
+            query_file.println(printTuple((Tuple3__bool__bit_8___stringReader)v));
+        });
+        query_file.println("Dump LI_by_all:");
+        flatbufTestQuery.dumpLI_by_all(this.api,
+                v -> {
+                    query_file.println(printTuple((Tuple3__bool__bit_8___stringReader)v));
+                });
+
+        query_file.println("Dump L0I:");
+        flatbufTestQuery.dumpL0I_by_a(this.api, v -> {
+            query_file.println("L0I{" + v.a() + "," + v.b() + ",\"" + v.s() + "\"}");
+        });
+
+        query_file.println("Dump MI_by_v:");
+        flatbufTestQuery.dumpMI_by_v(this.api, v -> {
+            query_file.println("MI{" + v.v() + "}");
+        });
+
+        query_file.println("Dump NI_by_v:");
+        flatbufTestQuery.dumpNI_by_v(this.api, 
+                v -> {
+                    query_file.println(printNI(v));
+                });
+
+        query_file.println("Dump OI_by_v:");
+        flatbufTestQuery.dumpOI_by_v(this.api,
+                v -> {
+                    query_file.println("OI{" + v.v() + "}");
+                });
+
+        query_file.println("Dump PI1_by_s:");
+        flatbufTestQuery.dumpPI1_by_s(this.api, v -> {
+            query_file.println("PI1{" + v.s() + "}");
+        });
+
+        query_file.println("Dump PI2_by_s:");
+        flatbufTestQuery.dumpPI2_by_s(this.api, v -> {
+            query_file.println("PI2{" + v.s() + "}");
+        });
+
+        query_file.println("Dump PI3_by_s:");
+        flatbufTestQuery.dumpPI3_by_s(this.api, v -> {
+            query_file.println("PI3{" + v.s() + "}");
+        });
+
+        query_file.println("Dump PI4_by_s:");
+        flatbufTestQuery.dumpPI4_by_s(this.api, v -> {
+            query_file.println("PI4{" + v.s() + "}");
+        });
+        query_file.println("Dump PI4_by_none:");
+        flatbufTestQuery.dumpPI4_by_none(this.api, v -> {
+            query_file.println("PI4{" + v.s() + "}");
+        });
+        query_file.println("Dump PI4_by_self:");
+        flatbufTestQuery.dumpPI4_by_self(this.api,
+                v -> {
+                    query_file.println("PI4{" + v.s() + "}");
+                });
+
+        query_file.println("Dump PI5_by_s:");
+        flatbufTestQuery.dumpPI5_by_s(this.api, v -> {
+            query_file.println("PI5{" + v.s() + "}");
+        });
+
+        query_file.println("Dump QI_by_m:");
+        flatbufTestQuery.dumpQI_by_m(this.api, v -> {
+            query_file.println(printQI(v));
+        });
+
+        query_file.println("Dump RI_by_refm:");
+        flatbufTestQuery.dumpRI_by_refm(this.api, v -> {
+            query_file.println("RI{" + v.m() + "}");
+        });
+        query_file.println("Dump RI_by_m:");
+        flatbufTestQuery.dumpRI_by_m(this.api, v -> {
+            query_file.println("RI{" + v.m() + "}");
+        });
+
+        query_file.println("Dump SI_by_m:");
+        flatbufTestQuery.dumpSI_by_m(this.api,
+                v -> {
+                    query_file.println("SI{C{\"" + v.m().x() + "\"}}");
+                });
+        query_file.println("Dump SI_by_x:");
+        flatbufTestQuery.dumpSI_by_x(this.api,
+                v -> {
+                    query_file.println("SI{C{\"" + v.m().x() + "\"}}");
+                });
+
+        query_file.println("Dump TI_by_m:");
+        flatbufTestQuery.dumpTI_by_m(this.api,
+                v -> { query_file.println(printTI(v)); });
+        query_file.println("Dump TI_by_some:");
+        flatbufTestQuery.dumpTI_by_some(this.api,
+                v -> { query_file.println(printTI(v)); });
+        query_file.println("Dump TI_by_none:");
+        flatbufTestQuery.dumpTI_by_none(this.api,
+                v -> { query_file.println(printTI(v)); });
+
+        query_file.println("Dump UI_by_x:");
+        flatbufTestQuery.dumpUI_by_x(this.api,
+                v -> { query_file.println(printMany(v)); });
+        query_file.println("Dump UI_by_b:");
+        flatbufTestQuery.dumpUI_by_b(this.api,
+                v -> { query_file.println(printMany(v)); });
+        query_file.println("Dump UI_by_t:");
+        flatbufTestQuery.dumpUI_by_t(this.api,
+                v -> { query_file.println(printMany(v)); });
+        query_file.println("Dump UI_by_t1:");
+        flatbufTestQuery.dumpUI_by_t1(this.api,
+                v -> { query_file.println(printMany(v)); });
+
+        query_file.println("Dump VI_by_a:");
+        flatbufTestQuery.dumpVI_by_a(this.api,
+                v -> {
+                    query_file.println("VI{" + v.a() + "," + printMany(v.b()) + "}");
+                });
+        query_file.println("Dump VI_by_t1:");
+        flatbufTestQuery.dumpVI_by_t1(this.api,
+                v -> {
+                    query_file.println("VI{" + v.a() + "," + printMany(v.b()) + "}");
+                });
+
+        query_file.println("Dump WI_by_t2:");
+        flatbufTestQuery.dumpWI_by_t2(this.api,
+                v -> { query_file.println(printWI(v)); });
+        query_file.println("Dump WI_by_t:");
+        flatbufTestQuery.dumpWI_by_t(this.api,
+                v -> { query_file.println(printWI(v)); });
+
+        query_file.println("Dump XI_by_m:");
+        flatbufTestQuery.dumpXI_by_m(this.api,
+                v -> { query_file.println(printXI(v)); });
+
+        query_file.println("Dump YI_by_v:");
+        flatbufTestQuery.dumpYI_by_v(this.api,
+                v -> { query_file.println(printYI(v)); });
+        query_file.println("Dump YI_by_none:");
+        flatbufTestQuery.dumpYI_by_none(this.api,
+                v -> { query_file.println(printYI(v)); });
+        query_file.println("Dump YI_by_self:");
+        flatbufTestQuery.dumpYI_by_self(this.api,
+                v -> { query_file.println(printYI(v)); });
+
+        query_file.println("Dump ZI_by_d:");
+        flatbufTestQuery.dumpZI_by_d(this.api,
+                v -> { query_file.println("HI{" + v.d() + "}"); });
+
+        query_file.println("Dump ZI0_by_self:");
+        flatbufTestQuery.dumpZI0_by_self(this.api,
+                v -> { query_file.println("\"" + v + "\""); });
+
+        query_file.println("Dump ZI1_by_self:");
+        flatbufTestQuery.dumpZI1_by_self(this.api,
+                v -> { query_file.println(v); });
+        query_file.println("Dump ZI1_by_true:");
+        flatbufTestQuery.dumpZI1_by_true(this.api,
+                v -> { query_file.println(v); });
+
+        query_file.println("Dump ZI2_by_self:");
+        flatbufTestQuery.dumpZI2_by_self(this.api,
+                v -> { query_file.println(v); });
+        query_file.println("Dump ZI2_by_const:");
+        flatbufTestQuery.dumpZI2_by_const(this.api,
+                v -> { query_file.println(v); });
+
+        query_file.println("Dump ZI3_by_self:");
+        flatbufTestQuery.dumpZI3_by_self(this.api,
+                v -> { query_file.println(printMany(v)); });
+        query_file.println("Dump ZI3_by_const:");
+        flatbufTestQuery.dumpZI3_by_const(this.api,
+                v -> { query_file.println(printMany(v)); });
+
+        query_file.println("Dump ZI4_by_self:");
+        flatbufTestQuery.dumpZI4_by_self(this.api,
+                v -> { query_file.println(printStrings(v)); });
+
+        query_file.println("Dump ZI5_by_self:");
+        flatbufTestQuery.dumpZI5_by_self(this.api,
+                v -> { query_file.println(printZI5(v)); });
+
+        query_file.println("Dump ZI6_by_self:");
+        flatbufTestQuery.dumpZI6_by_self(this.api,
+                v -> { query_file.println(printOptString(v)); });
+        query_file.println("Dump ZI6_by_none:");
+        flatbufTestQuery.dumpZI6_by_none(this.api,
+                v -> { query_file.println(printOptString(v)); });
+
+        query_file.println("Dump ZI7_by_self:");
+        flatbufTestQuery.dumpZI7_by_self(this.api,
+                v -> { query_file.println("\"" + v + "\""); });
+        query_file.println("Dump ZI7_by_val:");
+        flatbufTestQuery.dumpZI7_by_val(this.api,
+                v -> { query_file.println("\"" + v + "\""); });
+
+        query_file.println("Dump ZI8_by_self:");
+        flatbufTestQuery.dumpZI8_by_self(this.api,
+                v -> { query_file.println(v); });
+
+        query_file.println("Dump ZI9_by_self:");
+        flatbufTestQuery.dumpZI9_by_self(this.api,
+                v -> { query_file.println(v); });
+        query_file.println("Dump ZI9_by_refval:");
+        flatbufTestQuery.dumpZI9_by_refval(this.api,
+                v -> { query_file.println(v); });
+        query_file.println("Dump ZI9_by_val:");
+        flatbufTestQuery.dumpZI9_by_val(this.api,
+                v -> { query_file.println(v); });
+        query_file.println("Dump ZI9_by_const:");
+        flatbufTestQuery.dumpZI9_by_const(this.api,
+                v -> { query_file.println(v); });
+
+        query_file.println("Dump ZI10_by_self:");
+        flatbufTestQuery.dumpZI10_by_self(this.api,
+                v -> { query_file.println("\"" + v + "\""); });
+
+        query_file.println("Dump ZI11_by_self:");
+        flatbufTestQuery.dumpZI11_by_self(this.api,
+                v -> { query_file.println(printZI11(v)); });
+
+        query_file.println("Dump ZI12_by_self:");
+        flatbufTestQuery.dumpZI12_by_self(this.api,
+                v -> { query_file.println(printZI12(v)); });
+        query_file.println("Dump ZI12_by_0:");
+        flatbufTestQuery.dumpZI12_by_0(this.api,
+                v -> { query_file.println(printZI12(v)); });
+        query_file.println("Dump ZI12_by_1:");
+        flatbufTestQuery.dumpZI12_by_1(this.api,
+                v -> { query_file.println(printZI12(v)); });
+        query_file.println("Dump ZI12_by_2:");
+        flatbufTestQuery.dumpZI12_by_2(this.api,
+                v -> { query_file.println(printZI12(v)); });
+        query_file.println("Dump ZI12_by_3:");
+        flatbufTestQuery.dumpZI12_by_3(this.api,
+                v -> { query_file.println(printZI12(v)); });
+        query_file.println("Dump ZI12_by_30:");
+        flatbufTestQuery.dumpZI12_by_30(this.api,
+                v -> { query_file.println(printZI12(v)); });
+        query_file.println("Dump ZI12_by_31:");
+        flatbufTestQuery.dumpZI12_by_31(this.api,
+                v -> { query_file.println(printZI12(v)); });
+
+        query_file.println("Dump ZI13_by_f0:");
+        flatbufTestQuery.dumpZI13_by_f0(this.api,
+                v -> { query_file.println(printZI13(v)); });
+        query_file.println("Dump ZI13_by_f1:");
+        flatbufTestQuery.dumpZI13_by_f1(this.api,
+                v -> { query_file.println(printZI13(v)); });
+        query_file.println("Dump ZI13_by_f2:");
+        flatbufTestQuery.dumpZI13_by_f2(this.api,
+                v -> { query_file.println(printZI13(v)); });
+        query_file.println("Dump ZI13_by_t2:");
+        flatbufTestQuery.dumpZI13_by_t2(this.api,
+                v -> { query_file.println(printZI13(v)); });
+
+        query_file.println("Dump ZI14_by_self:");
+        flatbufTestQuery.dumpZI14_by_self(this.api,
+                v -> { query_file.println(printCases("ZI14", v.c())); });
+        query_file.println("Dump ZI14_by_a:");
+        flatbufTestQuery.dumpZI14_by_a(this.api,
+                v -> { query_file.println(printCases("ZI14", v.c())); });
+        query_file.println("Dump ZI14_by_b:");
+        flatbufTestQuery.dumpZI14_by_b(this.api,
+                v -> { query_file.println(printCases("ZI14", v.c())); });
+
+        query_file.println("Dump ZI15_by_a:");
+        flatbufTestQuery.dumpZI15_by_a(this.api,
+                v -> { query_file.println(printOr("ZI15", v.c())); });
+
+        query_file.println("Dump module_ZI16_by_x:");
+        flatbufTestQuery.dumpmodule_ZI16_by_x(this.api,
+                v -> { query_file.println("module_ZI16{\"" + v.x() + "\"}"); });
+
+        query_file.println("Dump module_ZI18_by_0:");
+        flatbufTestQuery.dumpZI18_by_0(this.api,
+                v -> { query_file.println("module_ZI18{" + printMTuple(v.t()) + "}"); });
+
+        query_file.println("Dump module_ZI19_by_1:");
+        flatbufTestQuery.dumpmodule_ZI19_by_1(this.api,
+                v -> { query_file.println(printMTuple(v)); });
+
+        query_file.println("Dump ZI20_by_0:");
+        flatbufTestQuery.dumpZI20_by_0(this.api,
+                v -> { query_file.println("ZI20{" + printMTuple(v.t()) + "}"); });
+
+        query_file.println("Dump ZI21_by_m:");
+        flatbufTestQuery.dumpZI21_by_m(this.api,
+                v -> { query_file.println("ZI21{" + v.m() + "}"); });
+
+
         this.fb_file.close();
         this.query_file.close();
     }

@@ -271,6 +271,12 @@ impl DDlog for HDDlog {
         }
     }
 
+    fn dump_index(&self, index: IdxId) -> Result<Vec<Self::Value>, String> {
+        let idx = Indexes::try_from(index).map_err(|()| format!("unknown index {}", index))?;
+        let arrid = indexes2arrid(idx);
+        self.prog.lock().unwrap().dump_arrangement(arrid)
+    }
+
     fn query_index(&self, index: IdxId, key: Self::Value) -> Result<Vec<Self::Value>, String> {
         let idx = Indexes::try_from(index).map_err(|()| format!("unknown index {}", index))?;
         let arrid = indexes2arrid(idx);
@@ -761,6 +767,7 @@ pub unsafe extern "C" fn ddlog_query_index_from_flatbuf(
     resbuf_offset: *mut libc::size_t,
 ) -> raw::c_int {
     if prog.is_null()
+        || buf.is_null()
         || resbuf.is_null()
         || resbuf_size.is_null()
         || resbuf_capacity.is_null()
@@ -806,6 +813,66 @@ pub unsafe extern "C" fn ddlog_query_index_from_flatbuf(
     let prog = Arc::from_raw(prog);
     prog.eprintln(
         "ddlog_query_index_from_flatbuf(): error: DDlog was compiled without FlatBuffers support",
+    );
+    Arc::into_raw(prog);
+    -1
+}
+
+#[cfg(feature = "flatbuf")]
+#[no_mangle]
+pub unsafe extern "C" fn ddlog_dump_index_to_flatbuf(
+    prog: *const HDDlog,
+    idxid: libc::size_t,
+    resbuf: *mut *const u8,
+    resbuf_size: *mut libc::size_t,
+    resbuf_capacity: *mut libc::size_t,
+    resbuf_offset: *mut libc::size_t,
+) -> raw::c_int {
+    if prog.is_null()
+        || resbuf.is_null()
+        || resbuf_size.is_null()
+        || resbuf_capacity.is_null()
+        || resbuf_offset.is_null()
+    {
+        return -1;
+    };
+    let prog = Arc::from_raw(prog);
+
+    let ret = prog
+        .dump_index(idxid as IdxId)
+        .map(|res| {
+            let (fbvec, fboffset) = flatbuf::values_to_flatbuf(&res);
+            *resbuf = fbvec.as_ptr();
+            *resbuf_size = fbvec.len() as libc::size_t;
+            *resbuf_capacity = fbvec.capacity() as libc::size_t;
+            *resbuf_offset = fboffset as libc::size_t;
+            mem::forget(fbvec);
+            0
+        })
+        .unwrap_or_else(|e| {
+            prog.eprintln(&format!("ddlog_dump_index_to_flatbuf(): error: {}", e));
+            -1
+        });
+    Arc::into_raw(prog);
+    ret
+}
+
+#[cfg(not(feature = "flatbuf"))]
+#[no_mangle]
+pub unsafe extern "C" fn ddlog_dump_index_to_flatbuf(
+    prog: *const HDDlog,
+    _idxid: libc::size_t,
+    _resbuf: *mut *const u8,
+    _resbuf_size: *mut libc::size_t,
+    _resbuf_capacity: *mut libc::size_t,
+    _resbuf_offset: *mut libc::size_t,
+) -> raw::c_int {
+    if prog.is_null() {
+        return -1;
+    };
+    let prog = Arc::from_raw(prog);
+    prog.eprintln(
+        "ddlog_dump_index_to_flatbuf(): error: DDlog was compiled without FlatBuffers support",
     );
     Arc::into_raw(prog);
     -1

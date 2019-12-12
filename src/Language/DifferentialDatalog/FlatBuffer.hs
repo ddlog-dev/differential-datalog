@@ -1037,7 +1037,8 @@ mkJavaQuery = ("ddlog" </> ?prog_name </> queryClass <.> "java",
     "import ddlogapi.DDlogException;"                                   $$
     "import com.google.flatbuffers.*;"                                  $$
     "public class" <+> pp queryClass                                    $$
-    (braces' $ (vcat $ map mk_query $ M.elems $ progIndexes ?d)))
+    (braces' $ (vcat $ map mk_query $ M.elems $ progIndexes ?d) $$
+               (vcat $ map mk_dump $ M.elems $ progIndexes ?d)))
     where
     mk_query idx@Index{..} =
         "public static void query" <> mkIdxId idx <>
@@ -1064,7 +1065,37 @@ mkJavaQuery = ("ddlog" </> ?prog_name </> queryClass <.> "java",
             -- Call ddlog_query.
             "DDlogAPI.FlatBufDescr resfb = new DDlogAPI.FlatBufDescr();"                                            $$
             "hddlog.queryIndexFromFlatBuf(fbbuilder.dataBuffer(), resfb);"                                          $$
-            -- deserialize response
+            deserialize idx
+        )
+        where
+        arg v = if typeRequiresBuilder v
+                   then "__" <> (pp $ name v)
+                   else pp $ name v
+        rel = idxRelation ?d idx
+        idx_type = tTuple $ map typ $ idxVars
+        val = case idxVars of
+                   [v] -> jConv2FBType FBUnion (arg v) (typ v)
+                   vs  -> let table = typeTableName idx_type in
+                          jFBCallConstructor table
+                                             (mapIdx (\v i -> jConv2FBType (FBField table ("a" ++ show i)) (arg v) (typ v)) vs)
+
+    mk_dump idx@Index{..} =
+        "public static void dump" <> mkIdxId idx <>
+            (parens $ commaSep 
+             $ ["DDlogAPI hddlog",
+               "java.util.function.Consumer<" <> jConvObjTypeR rel <> "> callback"]) <>
+            "throws DDlogException" $$
+        (braces' $
+            -- Call ddlog_dump.
+            "DDlogAPI.FlatBufDescr resfb = new DDlogAPI.FlatBufDescr();"                    $$
+            "hddlog.dumpIndexToFlatBuf(" <> (pp $ idxIdentifier ?d idx) <> ", resfb);"      $$
+            deserialize idx
+        )
+        where
+        rel = idxRelation ?d idx
+
+    -- deserialize response
+    deserialize idx@Index{..} =
             "try {"                                                                                                 $$
             "    " <> jFBPackage <> ".__Values vals =" <+> jFBPackage <> ".__Values.getRootAs__Values(resfb.buf);"  $$
             "    int len = vals.valuesLength();"                                                                    $$
@@ -1073,19 +1104,9 @@ mkJavaQuery = ("ddlog" </> ?prog_name </> queryClass <.> "java",
             "        callback.accept(" <> jReadField 0 FBUnion "__val" (typ rel) <> ");"                            $$
             "    }"                                                                                                 $$
             "} finally { hddlog.flatbufFree(resfb); }"
-        )
         where
-        arg v = if typeRequiresBuilder v
-                   then "__" <> (pp $ name v)
-                   else pp $ name v
         rel = idxRelation ?d idx
         rel_fb_type = jFBPackage <> "." <> typeTableName rel
-        idx_type = tTuple $ map typ $ idxVars
-        val = case idxVars of
-                   [v] -> jConv2FBType FBUnion (arg v) (typ v)
-                   vs  -> let table = typeTableName idx_type in
-                          jFBCallConstructor table
-                                             (mapIdx (\v i -> jConv2FBType (FBField table ("a" ++ show i)) (arg v) (typ v)) vs)
 
 -- Create parser class with methods to extract updates from FlatBuffer
 mkJavaParser :: (?d::DatalogProgram, ?prog_name::String) => (FilePath, Doc)
