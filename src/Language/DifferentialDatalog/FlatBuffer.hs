@@ -351,14 +351,16 @@ progTypesToSerialize :: (?d::DatalogProgram) => [Type]
 progTypesToSerialize =
     nub $
     concatMap relTypesToSerialize progIORelations ++ 
-    concatMap idxTypesToSerialize (M.elems $ progIndexes ?d)
+    concatMap idxTypesToSerialize (M.elems $ progIndexes ?d) ++
+    concatMap (relTypesToSerialize . idxRelation ?d) (M.elems $ progIndexes ?d)
 
 -- Types to be included in `union __Value`.
 progValTypes :: (?d::DatalogProgram) => [Type]
 progValTypes =
     nub $
     map (typeNormalizeForFlatBuf . relType) progIORelations ++
-    map (typeNormalizeForFlatBuf . idxKeyType) (M.elems $ progIndexes ?d)
+    map (typeNormalizeForFlatBuf . idxKeyType) (M.elems $ progIndexes ?d) ++
+    map (typeNormalizeForFlatBuf . relType . idxRelation ?d) (M.elems $ progIndexes ?d)
     
 progIORelations :: (?d::DatalogProgram) => [Relation]
 progIORelations =
