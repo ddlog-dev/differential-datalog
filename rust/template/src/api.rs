@@ -12,7 +12,6 @@ use std::sync::{Arc, Mutex};
 
 use libc::size_t;
 
-use std::collections::btree_set::BTreeSet;
 use differential_datalog::program::*;
 use differential_datalog::record;
 use differential_datalog::record::IntoRecord;
@@ -21,6 +20,7 @@ use differential_datalog::Callback;
 use differential_datalog::DDlog;
 use differential_datalog::DeltaMap;
 use differential_datalog::RecordReplay;
+use std::collections::btree_set::BTreeSet;
 
 use super::update_handler::*;
 use super::*;

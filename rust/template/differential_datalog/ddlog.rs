@@ -2,7 +2,6 @@ use std::fmt::Debug;
 use std::iter::Iterator;
 use std::ops::Deref;
 
-use std::collections::btree_set::BTreeSet;
 use crate::callback::Callback;
 use crate::program::IdxId;
 use crate::program::RelId;
@@ -10,6 +9,7 @@ use crate::program::Update;
 use crate::program::Val;
 use crate::record::UpdCmd;
 use crate::valmap::DeltaMap;
+use std::collections::btree_set::BTreeSet;
 
 /// Convert to and from values/objects of a DDlog program.
 pub trait DDlogConvert: Debug {

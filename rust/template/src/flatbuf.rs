@@ -583,7 +583,8 @@ pub fn query_from_flatbuf<'a>(buf: &'a [u8]) -> Response<(IdxId, Value)> {
 }
 
 pub fn values_to_flatbuf<I>(vals: &I) -> (Vec<u8>, usize)
-    where Iterator<Item=Value>
+where
+    I: Iterator<Item = Value>,
 {
     let size = vals.len();
 
