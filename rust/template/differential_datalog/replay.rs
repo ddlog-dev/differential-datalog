@@ -6,8 +6,8 @@ use std::io::Write;
 use std::iter::Peekable;
 
 use crate::ddlog::DDlogConvert;
-use crate::program::RelId;
 use crate::program::IdxId;
+use crate::program::RelId;
 use crate::program::Update;
 use crate::record::RelIdentifier;
 use crate::record::UpdCmd;
@@ -244,7 +244,11 @@ pub trait RecordReplay: Write {
         C: DDlogConvert<Value = V>,
         V: Debug,
     {
-        writeln!(self, "dump_index {};", C::indexid2name(iid).unwrap_or(&"???"))
+        writeln!(
+            self,
+            "dump_index {};",
+            C::indexid2name(iid).unwrap_or(&"???")
+        )
     }
 
     /// Record a dump_index command.
@@ -253,7 +257,12 @@ pub trait RecordReplay: Write {
         C: DDlogConvert<Value = V>,
         V: Display + Debug,
     {
-        writeln!(self, "query_index {}({});", C::indexid2name(iid).unwrap_or(&"???"), key)
+        writeln!(
+            self,
+            "query_index {}({});",
+            C::indexid2name(iid).unwrap_or(&"???"),
+            key
+        )
     }
 
     /// Record CPU profiling.

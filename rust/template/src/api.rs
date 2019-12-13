@@ -273,12 +273,14 @@ impl DDlog for HDDlog {
     }
 
     fn dump_index(&self, index: IdxId) -> Result<BTreeSet<Self::Value>, String> {
+        self.record_dump_index(index);
         let idx = Indexes::try_from(index).map_err(|()| format!("unknown index {}", index))?;
         let arrid = indexes2arrid(idx);
         self.prog.lock().unwrap().dump_arrangement(arrid)
     }
 
     fn query_index(&self, index: IdxId, key: Self::Value) -> Result<BTreeSet<Self::Value>, String> {
+        self.record_query_index(index, &key);
         let idx = Indexes::try_from(index).map_err(|()| format!("unknown index {}", index))?;
         let arrid = indexes2arrid(idx);
         self.prog.lock().unwrap().query_arrangement(arrid, key)
@@ -417,6 +419,30 @@ impl HDDlog {
                 .record_dump::<DDlogConverter, _>(rid)
                 .map_err(|e| {
                     self.eprintln("ddlog_dump_table(): failed to record invocation in replay file");
+                });
+        }
+    }
+
+    fn record_dump_index(&self, iid: IdxId) {
+        if let Some(ref f) = self.replay_file {
+            let _ = f
+                .lock()
+                .unwrap()
+                .record_dump_index::<DDlogConverter, _>(iid)
+                .map_err(|e| {
+                    self.eprintln("ddlog_dump_index(): failed to record invocation in replay file");
+                });
+        }
+    }
+
+    fn record_query_index(&self, iid: IdxId, key: &Value) {
+        if let Some(ref f) = self.replay_file {
+            let _ = f
+                .lock()
+                .unwrap()
+                .record_query_index::<DDlogConverter, _>(iid, key)
+                .map_err(|e| {
+                    self.eprintln("ddlog_dump_index(): failed to record invocation in replay file");
                 });
         }
     }
