@@ -162,6 +162,33 @@ fn handle_cmd(
                 Ok(())
             }
         }
+        Command::QueryIndex(idx, key) => {
+            Indexes::try_from(idx.as_str())
+                .map_err(|_| format!("Unknown index {}", idx))
+                .and_then(|idxid| {
+                    idxkey_from_record(idxid, &key)
+                        .and_then(|keyval| {
+                            hddlog.query_index(idxid as IdxId, keyval)
+                        })
+                })
+                .map(|mut vals| {
+                    for val in vals.drain(..) {
+                        let _ = writeln!(stdout(), "{}", val.clone().into_record());
+                    }
+                })
+        }
+        Command::DumpIndex(idx) => {
+            Indexes::try_from(idx.as_str())
+                .map_err(|_| format!("Unknown index {}", idx))
+                .and_then(|idxid| {
+                    hddlog.dump_index(idxid as IdxId)
+                })
+                .map(|mut vals| {
+                    for val in vals.drain(..) {
+                        let _ = writeln!(stdout(), "{}", val.clone().into_record());
+                    }
+                })
+        }
     });
     match resp {
         Ok(_) => (Ok(()), true),

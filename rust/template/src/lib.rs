@@ -212,6 +212,10 @@ pub fn relkey_from_record(_rel: Relations, _rec: &record::Record) -> Result<Valu
     panic!("relkey_from_record not implemented")
 }
 
+pub fn idxkey_from_record(idx: Indexes, _rec: &record::Record) -> Result<Value, String> {
+    panic!("idxkey_from_record not implemented")
+}
+
 pub fn relid2name(_rid: RelId) -> Option<&'static str> {
     panic!("relid2name not implemented")
 }
