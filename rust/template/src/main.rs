@@ -171,8 +171,8 @@ fn handle_cmd(
                             hddlog.query_index(idxid as IdxId, keyval)
                         })
                 })
-                .map(|mut vals| {
-                    for val in vals.drain(..) {
+                .map(|vals| {
+                    for val in vals.into_iter() {
                         let _ = writeln!(stdout(), "{}", val.clone().into_record());
                     }
                 })
@@ -183,8 +183,8 @@ fn handle_cmd(
                 .and_then(|idxid| {
                     hddlog.dump_index(idxid as IdxId)
                 })
-                .map(|mut vals| {
-                    for val in vals.drain(..) {
+                .map(|vals| {
+                    for val in vals.into_iter() {
                         let _ = writeln!(stdout(), "{}", val.clone().into_record());
                     }
                 })

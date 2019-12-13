@@ -2,6 +2,7 @@ use std::fmt::Debug;
 use std::iter::Iterator;
 use std::ops::Deref;
 
+use std::collections::btree_set::BTreeSet;
 use crate::callback::Callback;
 use crate::program::IdxId;
 use crate::program::RelId;
@@ -65,14 +66,14 @@ pub trait DDlog: Debug {
     fn apply_updates_from_flatbuf(&self, buf: &[u8]) -> Result<(), String>;
 
     /// Query index.  Returns all values associated with the given key in the index.
-    fn query_index(&self, index: IdxId, key: Self::Value) -> Result<Vec<Self::Value>, String>;
+    fn query_index(&self, index: IdxId, key: Self::Value) -> Result<BTreeSet<Self::Value>, String>;
 
     /// Similar to `query_index`, but extracts query from a flatbuffer.
     #[cfg(feature = "flatbuf")]
     fn query_index_from_flatbuf(&self, buf: &[u8]) -> Result<Vec<Self::Value>, String>;
 
     /// Dump all values in an index.
-    fn dump_index(&self, index: IdxId) -> Result<Vec<Self::Value>, String>;
+    fn dump_index(&self, index: IdxId) -> Result<BTreeSet<Self::Value>, String>;
 
     /// Stop the program.
     fn stop(&mut self) -> Result<(), String>;

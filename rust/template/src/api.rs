@@ -12,6 +12,7 @@ use std::sync::{Arc, Mutex};
 
 use libc::size_t;
 
+use std::collections::btree_set::BTreeSet;
 use differential_datalog::program::*;
 use differential_datalog::record;
 use differential_datalog::record::IntoRecord;
@@ -271,13 +272,13 @@ impl DDlog for HDDlog {
         }
     }
 
-    fn dump_index(&self, index: IdxId) -> Result<Vec<Self::Value>, String> {
+    fn dump_index(&self, index: IdxId) -> Result<BTreeSet<Self::Value>, String> {
         let idx = Indexes::try_from(index).map_err(|()| format!("unknown index {}", index))?;
         let arrid = indexes2arrid(idx);
         self.prog.lock().unwrap().dump_arrangement(arrid)
     }
 
-    fn query_index(&self, index: IdxId, key: Self::Value) -> Result<Vec<Self::Value>, String> {
+    fn query_index(&self, index: IdxId, key: Self::Value) -> Result<BTreeSet<Self::Value>, String> {
         let idx = Indexes::try_from(index).map_err(|()| format!("unknown index {}", index))?;
         let arrid = indexes2arrid(idx);
         self.prog.lock().unwrap().query_arrangement(arrid, key)

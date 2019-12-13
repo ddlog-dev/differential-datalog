@@ -13,6 +13,7 @@
 // TODO: single input relation
 
 use std::collections::btree_map::BTreeMap;
+use std::collections::btree_set::BTreeSet;
 use std::collections::hash_map;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::hash::Hash;
@@ -1068,7 +1069,7 @@ enum Reply<V: Val> {
     // Acknowledge flush completion (sent by worker 0 only).
     FlushAck,
     // Result of a query.
-    QueryRes(Option<Vec<V>>),
+    QueryRes(Option<BTreeSet<V>>),
 }
 
 impl<V: Val> Program<V> {
@@ -1659,15 +1660,15 @@ impl<V: Val> Program<V> {
             Some(k) => {
                 cursor.seek_key(&storage, &k);
                 if !cursor.key_valid(&storage) {
-                    vec![]
+                    BTreeSet::new()
                 } else {
-                    let mut vals = Vec::new();
+                    let mut vals = BTreeSet::new();
                     while cursor.val_valid(&storage) && *cursor.key(&storage) == k {
                         let mut weight = 0;
                         cursor.map_times(&storage, |_, diff| weight += diff);
                         assert!(weight >= 0);
                         if weight > 0 {
-                            vals.push(cursor.val(&storage).clone());
+                            vals.insert(cursor.val(&storage).clone());
                         };
                         cursor.step_val(&storage);
                     }
@@ -1675,14 +1676,14 @@ impl<V: Val> Program<V> {
                 }
             }
             None => {
-                let mut vals = Vec::new();
+                let mut vals = BTreeSet::new();
                 while cursor.key_valid(&storage) {
                     while cursor.val_valid(&storage) {
                         let mut weight = 0;
                         cursor.map_times(&storage, |_, diff| weight += diff);
                         assert!(weight >= 0);
                         if weight > 0 {
-                            vals.push(cursor.val(&storage).clone());
+                            vals.insert(cursor.val(&storage).clone());
                         };
                         cursor.step_val(&storage);
                     }
@@ -2261,21 +2262,21 @@ impl<V: Val> RunningProgram<V> {
     }
 
     /// Returns all values in the arrangement with the specified key.
-    pub fn query_arrangement(&mut self, arrid: ArrId, k: V) -> Response<Vec<V>> {
+    pub fn query_arrangement(&mut self, arrid: ArrId, k: V) -> Response<BTreeSet<V>> {
         self._query_arrangement(arrid, Some(k))
     }
 
     /// Returns the entire content of an arrangement.
-    pub fn dump_arrangement(&mut self, arrid: ArrId) -> Response<Vec<V>> {
+    pub fn dump_arrangement(&mut self, arrid: ArrId) -> Response<BTreeSet<V>> {
         self._query_arrangement(arrid, None)
     }
 
-    fn _query_arrangement(&mut self, arrid: ArrId, k: Option<V>) -> Response<Vec<V>> {
+    fn _query_arrangement(&mut self, arrid: ArrId, k: Option<V>) -> Response<BTreeSet<V>> {
         /* Send query and receive replies from all workers.  If a key is specified, then at most
          * one worker will send a non-empty reply. */
         self.broadcast(Msg::Query(arrid, k))?;
 
-        let mut res: Vec<V> = vec![];
+        let mut res: BTreeSet<V> = BTreeSet::new();
         let mut unknown = false;
         for (worker_index, chan) in self.reply_recv.iter().enumerate() {
             let reply = chan.recv().map_err(|e| {
