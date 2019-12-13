@@ -582,11 +582,11 @@ pub fn query_from_flatbuf<'a>(buf: &'a [u8]) -> Response<(IdxId, Value)> {
     }
 }
 
-pub fn values_to_flatbuf<I>(vals: &I) -> (Vec<u8>, usize)
+pub fn values_to_flatbuf<'a, I>(vals: I) -> (Vec<u8>, usize)
 where
-    I: Iterator<Item = Value>,
+    I: Iterator<Item = &'a Value>,
 {
-    let size = vals.len();
+    let size = vals.size_hint().0;
 
     /* Each value takes at least 4 bytes of FlatBuffer space. */
     let mut fbb = fbrt::FlatBufferBuilder::new_with_capacity(4 * size);
