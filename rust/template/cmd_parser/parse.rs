@@ -95,7 +95,10 @@ named!(pub parse_command<&[u8], Command>,
                   do_parse!(apply!(sym,"rollback") >> apply!(sym,";") >> (Command::Rollback))   |
                   do_parse!(apply!(sym,"query_index")                         >>
                             idx: identifier                                   >>
-                            args: separated_list!(apply!(sym,","), record)    >>
+                            args: delimited!(
+                                apply!(sym,"("), 
+                                separated_list!(apply!(sym,","), record),
+                                apply!(sym,")"))                              >>
                             apply!(sym,";")                                   >>
                             (Command::QueryIndex(idx,
                                                  if args.len() == 1 {
