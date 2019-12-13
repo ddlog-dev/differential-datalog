@@ -792,22 +792,34 @@ mkValueFromRecord d@DatalogProgram{..} =
     (nest' $ nest' $ vcat $ key_entries)                                                            $$
     "        _ => Err(format!(\"relation {:?} does not have a primary key\", rel))"                 $$
     "    }"                                                                                         $$
+    "}"                                                                                             $$
+    "pub fn idxkey_from_record(idx: Indexes, _rec: &record::Record) -> Result<Value, String> {"     $$
+    "    match idx {"                                                                               $$
+    (nest' $ nest' $ vcat $ idx_entries)                                                            $$
+    "    }"                                                                                         $$
     "}"
     where
     entries = map mkrelval $ M.elems progRelations
     mkrelval :: Relation ->  Doc
     mkrelval rel@Relation{..} =
-        "Relations::" <> rname(name rel) <+> "=> {"                                                                     $$
-        "    Ok(Value::" <> mkValConstructorName d t <> (parens $ box d t $ "<" <> mkType t <> ">::from_record(_rec)?)")   $$
+        "Relations::" <> rname(name rel) <+> "=> {"                                                                         $$
+        "    Ok(Value::" <> mkValConstructorName d t <> (parens $ box d t $ "<" <> mkType t <> ">::from_record(_rec)?)")    $$
         "}"
         where t = typeNormalize d relType
     key_entries = map mkrelkey $ filter (isJust . relPrimaryKey) $ M.elems progRelations
     mkrelkey :: Relation ->  Doc
     mkrelkey rel@Relation{..} =
-        "Relations::" <> rname(name rel) <+> "=> {"                                                                  $$
-        "    Ok(Value::" <> mkValConstructorName d t <> (parens $ box d t $ "<" <> mkType t <> ">::from_record(_rec)?)")$$
+        "Relations::" <> rname(name rel) <+> "=> {"                                                                         $$
+        "    Ok(Value::" <> mkValConstructorName d t <> (parens $ box d t $ "<" <> mkType t <> ">::from_record(_rec)?)")    $$
         "},"
         where t = typeNormalize d $ fromJust $ relKeyType d rel
+    idx_entries = map mkidxkey $ M.elems progIndexes
+    mkidxkey :: Index ->  Doc
+    mkidxkey idx@Index{..} =
+        "Indexes::" <> rname (name idx) <+> "=> {"                                                                          $$
+        "    Ok(Value::" <> mkValConstructorName d t <> (parens $ box d t $ "<" <> mkType t <> ">::from_record(_rec)?)")    $$
+        "},"
+        where t = typeNormalize d $ idxKeyType idx
 
 -- Convert string to `enum Relations`
 mkRelationsTryFromStr :: DatalogProgram -> Doc
