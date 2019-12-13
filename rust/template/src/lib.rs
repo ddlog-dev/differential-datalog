@@ -98,6 +98,10 @@ impl DDlogConvert for DDlogConverter {
         relid2name(relId)
     }
 
+    fn indexid2name(idxId: IdxId) -> Option<&'static str> {
+        indexid2name(idxId)
+    }
+
     fn updcmd2upd(upd_cmd: &UpdCmd) -> Result<Update<Self::Value>, String> {
         updcmd2upd(upd_cmd)
     }

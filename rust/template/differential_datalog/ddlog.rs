@@ -18,6 +18,9 @@ pub trait DDlogConvert: Debug {
     /// Convert a `RelId` into its symbolic name.
     fn relid2name(rel_id: RelId) -> Option<&'static str>;
 
+    /// Convert a `IdxId` into its symbolic name.
+    fn indexid2name(idx_id: IdxId) -> Option<&'static str>;
+
     /// Convert an `UpdCmd` into an `Update`.
     fn updcmd2upd(upd_cmd: &UpdCmd) -> Result<Update<Self::Value>, String>;
 }
