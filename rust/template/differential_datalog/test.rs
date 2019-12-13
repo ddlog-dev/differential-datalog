@@ -899,13 +899,15 @@ fn test_join(nthreads: usize) {
 
     let rel2dump = running.dump_arrangement((2, 0)).unwrap();
     assert_eq!(
-        BTreeSet::from_iter(rel2dump.into_iter()),
+        rel2dump,
         BTreeSet::from_iter(vals.iter().map(|x| Value::u64(*x)))
     );
 
     for key in vals.iter() {
         let vals = running.query_arrangement((2, 0), Value::u64(*key)).unwrap();
-        assert_eq!(vals, vec![Value::u64(*key)]);
+        let mut expect = BTreeSet::new();
+        expect.insert(Value::u64(*key));
+        assert_eq!(vals, expect);
     }
 
     running.stop().unwrap();
