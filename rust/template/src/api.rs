@@ -285,7 +285,7 @@ impl DDlog for HDDlog {
     }
 
     #[cfg(feature = "flatbuf")]
-    fn query_index_from_flatbuf(&self, buf: &[u8]) -> Result<Vec<Value>, String> {
+    fn query_index_from_flatbuf(&self, buf: &[u8]) -> Result<BTreeSet<Value>, String> {
         let (idxid, key) = flatbuf::query_from_flatbuf(buf)?;
         self.query_index(idxid, key)
     }
@@ -781,7 +781,7 @@ pub unsafe extern "C" fn ddlog_query_index_from_flatbuf(
     let ret = prog
         .query_index_from_flatbuf(slice::from_raw_parts(buf, n))
         .map(|res| {
-            let (fbvec, fboffset) = flatbuf::values_to_flatbuf(&res);
+            let (fbvec, fboffset) = flatbuf::values_to_flatbuf(&res.iter());
             *resbuf = fbvec.as_ptr();
             *resbuf_size = fbvec.len() as libc::size_t;
             *resbuf_capacity = fbvec.capacity() as libc::size_t;
@@ -842,7 +842,7 @@ pub unsafe extern "C" fn ddlog_dump_index_to_flatbuf(
     let ret = prog
         .dump_index(idxid as IdxId)
         .map(|res| {
-            let (fbvec, fboffset) = flatbuf::values_to_flatbuf(&res);
+            let (fbvec, fboffset) = flatbuf::values_to_flatbuf(&res.iter());
             *resbuf = fbvec.as_ptr();
             *resbuf_size = fbvec.len() as libc::size_t;
             *resbuf_capacity = fbvec.capacity() as libc::size_t;

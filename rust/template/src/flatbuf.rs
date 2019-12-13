@@ -582,14 +582,16 @@ pub fn query_from_flatbuf<'a>(buf: &'a [u8]) -> Response<(IdxId, Value)> {
     }
 }
 
-pub fn values_to_flatbuf(vals: &Vec<Value>) -> (Vec<u8>, usize) {
+pub fn values_to_flatbuf<I>(vals: &I) -> (Vec<u8>, usize)
+    where Iterator<Item=Value>
+{
     let size = vals.len();
 
     /* Each value takes at least 4 bytes of FlatBuffer space. */
     let mut fbb = fbrt::FlatBufferBuilder::new_with_capacity(4 * size);
     let mut val_tables = Vec::with_capacity(size);
 
-    for val in vals.iter() {
+    for val in vals {
         val_tables.push(val.to_flatbuf_vector_element(&mut fbb));
     }
 

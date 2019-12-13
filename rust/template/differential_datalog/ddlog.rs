@@ -70,7 +70,7 @@ pub trait DDlog: Debug {
 
     /// Similar to `query_index`, but extracts query from a flatbuffer.
     #[cfg(feature = "flatbuf")]
-    fn query_index_from_flatbuf(&self, buf: &[u8]) -> Result<Vec<Self::Value>, String>;
+    fn query_index_from_flatbuf(&self, buf: &[u8]) -> Result<BTreeSet<Self::Value>, String>;
 
     /// Dump all values in an index.
     fn dump_index(&self, index: IdxId) -> Result<BTreeSet<Self::Value>, String>;
