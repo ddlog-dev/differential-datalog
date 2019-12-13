@@ -541,9 +541,17 @@ compileLib d specname rs_code =
 -- Add dummy relation to the spec if it does not contain any.
 -- Otherwise, we have to tediously handle this corner case in various
 -- parts of the compiler.
+-- Likewise, add a dummy index if the spec does not contain any.
 addDummyRel :: DatalogProgram -> DatalogProgram
-addDummyRel d | not $ M.null $ progRelations d = d
-              | otherwise = d {progRelations = M.singleton "Null" $ Relation nopos RelInternal "Null" (tTuple []) Nothing}
+addDummyRel d =
+    d {progRelations = rels, progIndexes = idxs}
+    where
+    rels = if (M.null $ progRelations d) || (M.null $ progIndexes d)
+              then M.insert "__Null" (Relation nopos RelInternal "__Null" (tTuple []) Nothing) (progRelations d)
+              else progRelations d
+    idxs = if M.null $ progIndexes d
+              then M.singleton "__Null_by_none" $ Index nopos "__Null_by_none" [] $ Atom nopos "__Null" $ eTuple []
+              else progIndexes d
 
 mkTypedef :: DatalogProgram -> TypeDef -> Doc
 mkTypedef d tdef@TypeDef{..} =
