@@ -17,7 +17,7 @@ use std::collections::btree_set::BTreeSet;
 use std::collections::hash_map;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::hash::Hash;
-use std::ops::{Add, Deref, Mul};
+use std::ops::{Deref, Mul};
 use std::result::Result;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::mpsc;
@@ -27,11 +27,13 @@ use std::time::Duration;
 
 use abomonation::Abomonation;
 
+use num_traits::identities::One;
+use num_traits::ops::saturating::Saturating;
+
 // use deterministic hash-map and hash-set, as differential dataflow expects deterministic order of
 // creating relations
 use fnv::FnvHashMap;
 use fnv::FnvHashSet;
-use num::One;
 
 use serde::de::*;
 use serde::ser::*;
@@ -61,9 +63,9 @@ use timely::dataflow::operators::*;
 use timely::dataflow::scopes::*;
 use timely::dataflow::ProbeHandle;
 use timely::logging::TimelyEvent;
-use timely::order::{PartialOrder, Product, TotalOrder};
+use timely::order::{Product, TotalOrder};
 use timely::progress::timestamp::Refines;
-use timely::progress::{PathSummary, Timestamp};
+use timely::progress::Timestamp;
 use timely::worker::Worker;
 
 use crate::profile::*;
@@ -85,7 +87,7 @@ use dogsdogsdogs::operators::propose;
  * TODO: get rid of this and use `u16` directly when/if differential implements
  * `Lattice`, `Timestamp`, `PathSummary` traits for `u16`.
  */
-#[derive(Copy, PartialOrd, PartialEq, Eq, Debug, Default, Clone, Hash, Ord)]
+/*#[derive(Copy, PartialOrd, PartialEq, Eq, Debug, Default, Clone, Hash, Ord)]
 pub struct TS16 {
     pub x: u16,
 }
@@ -131,12 +133,6 @@ impl PartialOrder for TS16 {
 }
 impl Lattice for TS16 {
     #[inline(always)]
-    fn minimum() -> Self {
-        TS16 {
-            x: u16::min_value(),
-        }
-    }
-    #[inline(always)]
     fn join(&self, other: &Self) -> Self {
         TS16 {
             x: ::std::cmp::max(self.x, other.x),
@@ -152,7 +148,15 @@ impl Lattice for TS16 {
 
 impl Timestamp for TS16 {
     type Summary = TS16;
+
+    #[inline(always)]
+    fn minimum() -> Self {
+        TS16 {
+            x: u16::min_value(),
+        }
+    }
 }
+
 impl PathSummary<TS16> for TS16 {
     #[inline]
     fn results_in(&self, src: &TS16) -> Option<TS16> {
@@ -169,6 +173,8 @@ impl PathSummary<TS16> for TS16 {
         }
     }
 }
+*/
+
 
 /* Outer timestamp */
 pub type TS = u32;
@@ -177,7 +183,7 @@ type TSAtomic = AtomicU32;
 /* Timestamp for the nested scope
  * Use 16-bit timestamps for inner scopes to save memory
  */
-pub type TSNested = TS16;
+pub type TSNested = u16;
 
 // Diff associated with records in differential dataflow
 pub type Weight = i32;
@@ -929,7 +935,7 @@ where
                 self.arrangements2
                     .get(&arrid)
                     .map(|arr| A::Arrangement2(arr))
-                    .unwrap_or_else(|| panic!("mk_rule: unknown arrangement {:?}", arrid))
+                    .unwrap_or_else(|| panic!("lookup_arr: unknown arrangement {:?}", arrid))
             },
             |arr| A::Arrangement1(arr),
         )
@@ -1302,9 +1308,9 @@ impl<V: Val> Program<V> {
                                     };
                                     /* apply rules */
                                     let mut rule_collections: Vec<_> = rel.rules.iter().map(|rule| {
-                                        prog.mk_rule(outer, rule, |rid| collections.get(&rid),
-                                                     Arrangements{arrangements1: &arrangements,
-                                                     arrangements2: &BTreeMap::default()})
+                                        prog.mk_rule_outer(outer, rule, |rid| collections.get(&rid),
+                                                           Arrangements{arrangements1: &arrangements,
+                                                           arrangements2: &BTreeMap::default()})
 
                                     }).collect();
                                     rule_collections.push(collection);
@@ -1388,7 +1394,7 @@ impl<V: Val> Program<V> {
                                         for rel in rels {
                                             for rule in &rel.rel.rules {
                                                 let c = prog.mk_rule(
-                                                    inner, rule,
+                                                    rule,
                                                     |rid| vars.get(&rid).map(|v|&(**v)).or_else(|| inner_collections.get(&rid)),
                                                     Arrangements{arrangements1: &local_arrangements,
                                                                  arrangements2: &inner_arrangements});
@@ -2128,7 +2134,6 @@ impl<V: Val> Program<V> {
     /* Compile right-hand-side of a rule to a collection */
     fn mk_rule<'a, 'b, 'c, P, T, F>(
         &self,
-        scope: &mut Child<'c, P, T>,
         rule: &Rule<V>,
         lookup_collection: F,
         arrangements: Arrangements<'c, 'b, V, P, T>,
@@ -2170,6 +2175,25 @@ impl<V: Val> Program<V> {
                 }
                 _ => panic!("Rule starts with a set arrangement {:?}", *arr),
             },
+            Rule::DeltaRule { .. } => panic!("Delta rule in nested scope"),
+        }
+    }
+
+    fn mk_rule_outer<'a, 'b, 'c, P, T, F>(
+        &self,
+        scope: &mut Child<'c, P, T>,
+        rule: &Rule<V>,
+        lookup_collection: F,
+        arrangements: Arrangements<'c, 'b, V, P, T>,
+    ) -> Collection<Child<'c, P, T>, V, Weight>
+    where
+        P: ScopeParent + 'a,
+        P::Timestamp: Lattice,
+        T: Refines<P::Timestamp> + Lattice + Saturating + One + Timestamp + Ord,
+        F: Fn(RelId) -> Option<&'b Collection<Child<'c, P, T>, V, Weight>>,
+        'a: 'b,
+    {
+        match rule {
             Rule::DeltaRule {
                 description,
                 deltas,
@@ -2247,35 +2271,55 @@ impl<V: Val> Program<V> {
                             match arrangements.lookup_arr(*arr) {
                                 A::Arrangement1(ArrangedCollection::Map(arranged)) => match ts {
                                     OldNew::Old => {
-                                        local_arrangements_alt1
-                                            .insert((*arr, *ts), arranged.enter_at(inner, alt));
+                                        local_arrangements_alt1.insert(
+                                            (*arr, *ts),
+                                            arranged.enter_at(inner, alt, |t| {
+                                                t.time.clone().saturating_sub(T::one())
+                                            }),
+                                        );
                                     }
                                     OldNew::New => {
-                                        local_arrangements_neu1
-                                            .insert((*arr, *ts), arranged.enter_at(inner, neu));
+                                        local_arrangements_neu1.insert(
+                                            (*arr, *ts),
+                                            arranged.enter_at(inner, neu, |t| {
+                                                t.time.clone().saturating_sub(T::one())
+                                            }),
+                                        );
                                     }
                                 },
                                 A::Arrangement2(ArrangedCollection::Map(arranged)) => match ts {
                                     OldNew::Old => {
-                                        local_arrangements_alt2
-                                            .insert((*arr, *ts), arranged.enter_at(inner, alt));
+                                        local_arrangements_alt2.insert(
+                                            (*arr, *ts),
+                                            arranged.enter_at(inner, alt, |t| {
+                                                t.time.clone().saturating_sub(T::one())
+                                            }),
+                                        );
                                     }
                                     OldNew::New => {
-                                        local_arrangements_neu2
-                                            .insert((*arr, *ts), arranged.enter_at(inner, neu));
+                                        local_arrangements_neu2.insert(
+                                            (*arr, *ts),
+                                            arranged.enter_at(inner, neu, |t| {
+                                                t.time.clone().saturating_sub(T::one())
+                                            }),
+                                        );
                                     }
                                 },
                                 A::Arrangement1(ArrangedCollection::Set(arranged)) => match ts {
                                     OldNew::Old => {
                                         local_semi_arrangements_alt1.insert(
                                             (*arr, *ts),
-                                            arranged.enter_at(inner, semi_alt),
+                                            arranged.enter_at(inner, semi_alt, |t| {
+                                                t.time.clone().saturating_sub(T::one())
+                                            }),
                                         );
                                     }
                                     OldNew::New => {
                                         local_semi_arrangements_neu1.insert(
                                             (*arr, *ts),
-                                            arranged.enter_at(inner, semi_neu),
+                                            arranged.enter_at(inner, semi_neu, |t| {
+                                                t.time.clone().saturating_sub(T::one())
+                                            }),
                                         );
                                     }
                                 },
@@ -2283,13 +2327,17 @@ impl<V: Val> Program<V> {
                                     OldNew::Old => {
                                         local_semi_arrangements_alt2.insert(
                                             (*arr, *ts),
-                                            arranged.enter_at(inner, semi_alt),
+                                            arranged.enter_at(inner, semi_alt, |t| {
+                                                t.time.clone().saturating_sub(T::one())
+                                            }),
                                         );
                                     }
                                     OldNew::New => {
                                         local_semi_arrangements_neu2.insert(
                                             (*arr, *ts),
-                                            arranged.enter_at(inner, semi_neu),
+                                            arranged.enter_at(inner, semi_neu, |t| {
+                                                t.time.clone().saturating_sub(T::one())
+                                            }),
                                         );
                                     }
                                 },
@@ -2410,6 +2458,7 @@ impl<V: Val> Program<V> {
                     concatenate_collections(inner, diffs.into_iter()).leave()
                 })
             }
+            _ => self.mk_rule(rule, lookup_collection, arrangements),
         }
     }
 }

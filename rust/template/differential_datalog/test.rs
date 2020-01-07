@@ -1083,22 +1083,22 @@ fn test_delta(nthreads: usize) {
                 Arrangement::Map {
                     name: "(_0,_)".to_string(),
                     afun: &(afun1 as ArrangeFunc<Value>),
-                    queryable: false
+                    queryable: false,
                 },
                 Arrangement::Map {
                     name: "(_,_0)".to_string(),
                     afun: &(afun2 as ArrangeFunc<Value>),
-                    queryable: false
+                    queryable: false,
                 },
                 Arrangement::Map {
                     name: "(_0,_1)".to_string(),
                     afun: &(afun3 as ArrangeFunc<Value>),
-                    queryable: false
+                    queryable: false,
                 },
                 Arrangement::Map {
                     name: "(_1,_0)".to_string(),
                     afun: &(afun4 as ArrangeFunc<Value>),
-                    queryable: false
+                    queryable: false,
                 },
             ],
             change_cb: Some(Arc::new(Mutex::new(Box::new(move |_, v, pol| {
@@ -1264,17 +1264,17 @@ fn test_triangles(nthreads: usize) {
                 Arrangement::Map {
                     name: "(_0,_)".to_string(),
                     afun: &(afun1 as ArrangeFunc<Value>),
-                    queryable: false
+                    queryable: false,
                 },
                 Arrangement::Map {
                     name: "(_,_0)".to_string(),
                     afun: &(afun2 as ArrangeFunc<Value>),
-                    queryable: false
+                    queryable: false,
                 },
                 Arrangement::Map {
                     name: "(_0,_1)".to_string(),
                     afun: &(afun3 as ArrangeFunc<Value>),
-                    queryable: false
+                    queryable: false,
                 },
             ],
             change_cb: Some(Arc::new(Mutex::new(Box::new(move |_, v, pol| {
