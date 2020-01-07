@@ -2196,13 +2196,13 @@ impl Program {
                             }
                         }
                         for (arr, ts) in arrdeps.iter() {
-                            let alt: (for<'r, 's, 't0> fn(&'r V, &'s V, &'t0 T) -> _) =
+                            let alt: for<'r, 's, 't0> fn(&'r V, &'s V, &'t0 T) -> _ =
                                 |_, _, t| AltNeu::alt(t.clone());
-                            let neu: (for<'r, 's, 't0> fn(&'r V, &'s V, &'t0 T) -> _) =
+                            let neu: for<'r, 's, 't0> fn(&'r V, &'s V, &'t0 T) -> _ =
                                 |_, _, t| AltNeu::neu(t.clone());
-                            let semi_alt: (for<'r, 's, 't0> fn(&'r V, &'s (), &'t0 T) -> _) =
+                            let semi_alt: for<'r, 's, 't0> fn(&'r V, &'s (), &'t0 T) -> _ =
                                 |_, _, t| AltNeu::alt(t.clone());
-                            let semi_neu: (for<'r, 's, 't0> fn(&'r V, &'s (), &'t0 T) -> _) =
+                            let semi_neu: for<'r, 's, 't0> fn(&'r V, &'s (), &'t0 T) -> _ =
                                 |_, _, t| AltNeu::neu(t.clone());
                             match arrangements.lookup_arr(*arr) {
                                 A::Arrangement1(ArrangedCollection::Map(arranged)) => match ts {
