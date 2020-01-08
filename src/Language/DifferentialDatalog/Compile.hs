@@ -1775,15 +1775,16 @@ _mkJoin d is_delta input_filters input_val rl@Rule{..} join_idx = do
     let (aid, is_semi) = if semijoin
                             then maybe (fromJust join_arr_idx, False) (,True) semi_arr_idx
                             else (fromJust join_arr_idx, False)
+    -- Variables from previous terms visible in the join term.
+    let pre_join_vars = rhsVarsAfter d rl (join_idx - 1)
     -- Variables from previous terms that will be used in terms
     -- following the join.
-    let post_join_vars = (rhsVarsAfter d rl (join_idx - 1)) `intersect`
-                         (rhsVarsAfter d rl join_idx)
+    let post_join_vars = pre_join_vars `intersect` (rhsVarsAfter d rl join_idx)
     -- Open input Value or tuple.  We may need to do this twice: once to filter
     -- input before join and once to filter output of the join.
     let open_input v = if input_val
                           then openAtom d v rl 0 (rhsAtom $ ruleRHS !! 0) "return None"
-                          else openTuple d v post_join_vars
+                          else openTuple d v $ if is_delta then pre_join_vars else post_join_vars
     -- Filter inputs using 'input_filters'
     ffun <- mkFFun d rl input_filters
     -- simplify pattern to only extract new variables from it
