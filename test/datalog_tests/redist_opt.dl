@@ -22,7 +22,7 @@ input relation DdlogDependency(parent: entid_t, child: entid_t)
 
 relation ValidDependency(parent: entid_t, child: entid_t)
 
-//#[multiway]
+#[multiway]
 ValidDependency(parent, child) :- DdlogDependency(parent, child), DdlogNode(parent, _), DdlogNode(child, _).
 
 relation ExtDdlogDependency(parent: entid_t, child: entid_t)
@@ -73,6 +73,8 @@ LabeledNode(node, node) :- DdlogNode(node, _), not SCCLabel[(node, _)].
  * connected by a ExtDdlogDependency edge.
  */
 relation SCCEdge(parent: entid_t, child: entid_t)
+
+#[multiway]
 SCCEdge(parentscc,childscc) :-
     ExtDdlogDependency(parent, child),
     LabeledNode(parent, parentscc),

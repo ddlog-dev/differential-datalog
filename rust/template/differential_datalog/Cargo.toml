@@ -11,12 +11,17 @@ serde_derive = "1.0"
 
 [dependencies]
 #differential-dataflow = "0.9"
-differential-dataflow = { git = "https://github.com/ryzhyk/differential-dataflow", branch="0.10.4" }
-dogsdogsdogs = { git = "https://github.com/ryzhyk/differential-dataflow", branch="0.10.4" }
+#differential-dataflow = { git = "https://github.com/ryzhyk/differential-dataflow", branch="0.10.4" }
+differential-dataflow = { git = "https://github.com/frankmcsherry/differential-dataflow", branch="dogs_distinguish_less" }
+#dogsdogsdogs = { git = "https://github.com/ryzhyk/differential-dataflow", branch="0.10.4" }
+dogsdogsdogs = { git = "https://github.com/frankmcsherry/differential-dataflow", branch="dogs_distinguish_less" }
 #differential-dataflow = { git = "https://github.com/ryzhyk/differential-dataflow"}
 abomonation = "0.7"
 fnv = "1.0.2"
-timely = "0.11"
+#timely = "0.11"
+#timely = "0.9"
+timely = { git = "https://github.com/TimelyDataflow/timely-dataflow" }
+#timely = { git = "https://github.com/ryzhyk/timely-dataflow" }
 libc = "0.2"
 num = { version = "0.2", features = ["serde"] }
 num-traits = "0.2"
