@@ -39,17 +39,17 @@ use std::process;
 use std::ptr;
 use std::sync::atomic;
 use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
-use std::{isize, usize};
+use std::{i32, u32};
 
 /// A soft limit on the amount of references that may be made to an `Arc`.
 ///
 /// Going above this limit will abort your program (although not
 /// necessarily) at _exactly_ `MAX_REFCOUNT + 1` references.
-const MAX_REFCOUNT: usize = (isize::MAX) as usize;
+const MAX_REFCOUNT: u32 = (i32::MAX) as u32;
 
 /// Special refcount value that means the data is not reference counted,
 /// and that the `Arc` is really acting as a read-only static reference.
-const STATIC_REFCOUNT: usize = usize::MAX;
+const STATIC_REFCOUNT: u32 = u32::MAX;
 
 /// An atomically reference counted shared pointer
 ///
@@ -113,7 +113,7 @@ impl<T> UniqueArc<T> {
             let mut p = ptr::NonNull::new(ptr)
                 .unwrap_or_else(|| alloc::handle_alloc_error(layout))
                 .cast::<ArcInner<mem::MaybeUninit<T>>>();
-            ptr::write(&mut p.as_mut().count, atomic::AtomicUsize::new(1));
+            ptr::write(&mut p.as_mut().count, atomic::AtomicU32::new(1));
 
             #[cfg(feature = "gecko_refcount_logging")]
             {
@@ -165,7 +165,7 @@ unsafe impl<T: ?Sized + Sync + Send> Sync for Arc<T> {}
 /// The object allocated by an Arc<T>
 #[repr(C)]
 struct ArcInner<T: ?Sized> {
-    count: atomic::AtomicUsize,
+    count: atomic::AtomicU32,
     data: T,
 }
 
@@ -185,7 +185,7 @@ impl<T> Arc<T> {
     #[inline]
     pub fn new(data: T) -> Self {
         let ptr = Box::into_raw(Box::new(ArcInner {
-            count: atomic::AtomicUsize::new(1),
+            count: atomic::AtomicU32::new(1),
             data,
         }));
 
@@ -257,7 +257,7 @@ impl<T> Arc<T> {
         let ptr = alloc(Layout::new::<ArcInner<T>>()) as *mut ArcInner<T>;
 
         let x = ArcInner {
-            count: atomic::AtomicUsize::new(STATIC_REFCOUNT),
+            count: atomic::AtomicU32::new(STATIC_REFCOUNT),
             data,
         };
 
@@ -619,7 +619,7 @@ mod tests {
     use std::sync::atomic::Ordering::SeqCst;
 
     #[derive(PartialEq)]
-    struct Canary(*mut atomic::AtomicUsize);
+    struct Canary(*mut atomic::AtomicU32);
 
     impl Drop for Canary {
         fn drop(&mut self) {
