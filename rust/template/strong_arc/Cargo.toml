@@ -1,0 +1,16 @@
+[package]
+name = "strong_arc"
+version = "0.1.1"
+authors = ["The Servo Project Developers"]
+license = "MIT/Apache-2.0"
+description = "A fork of std::sync::Arc with some extra functionality and without weak references"
+
+[lib]
+name = "strong_arc"
+path = "lib.rs"
+
+[features]
+gecko_refcount_logging = []
+
+[dependencies]
+serde = {version = "1.0"}

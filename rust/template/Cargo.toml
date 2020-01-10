@@ -11,6 +11,7 @@ members = [
   "differential_datalog",
   "distributed_datalog",
   "ovsdb",
+  "strong_arc",
 ]
 
 [build-dependencies]
@@ -24,6 +25,9 @@ path = "./cmd_parser"
 
 [dependencies.ddlog_ovsdb_adapter]
 path = "./ovsdb"
+
+[dependencies.strong_arc]
+path = "./strong_arc"
 
 [dependencies]
 abomonation = "0.7"

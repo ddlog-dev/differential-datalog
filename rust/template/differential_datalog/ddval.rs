@@ -269,8 +269,8 @@ macro_rules! decl_ddval_convert {
                 if std::mem::size_of::<Self>() <= std::mem::size_of::<usize>() {
                     &mut *(&mut v.v as *mut usize as *mut Self)
                 } else {
-                    let arc = std::sync::Arc::from_raw(v.v as *const Self);
-                    v.v = std::sync::Arc::into_raw(arc) as usize;
+                    let arc = strong_arc::Arc::from_raw(v.v as *const Self);
+                    v.v = strong_arc::Arc::into_raw(arc) as usize;
                     &mut *(v.v as *mut Self)
                 }
             }
@@ -283,8 +283,10 @@ macro_rules! decl_ddval_convert {
                     std::mem::forget(v);
                     res
                 } else {
-                    let arc = std::sync::Arc::from_raw(v.v as *const Self);
-                    std::sync::Arc::try_unwrap(arc).unwrap_or_else(|a| (*a).clone())
+                    let arc = strong_arc::Arc::from_raw(v.v as *const Self);
+                    // TODO: use try_unwrap
+                    //strong_arc::Arc::try_unwrap(arc).unwrap_or_else(|a| (*a).clone())
+                    (*arc).clone()
                 }
             }
 
@@ -298,7 +300,7 @@ macro_rules! decl_ddval_convert {
                     $crate::ddval::DDVal { v }
                 } else {
                     $crate::ddval::DDVal {
-                        v: std::sync::Arc::into_raw(std::sync::Arc::new(self)) as usize,
+                        v: strong_arc::Arc::into_raw(strong_arc::Arc::new(self)) as usize,
                     }
                 }
             }
@@ -310,11 +312,11 @@ macro_rules! decl_ddval_convert {
                             if std::mem::size_of::<$t>() <= std::mem::size_of::<usize>() {
                                 unsafe { <$t>::from_ddval_ref(this) }.clone().into_ddval()
                             } else {
-                                let arc = unsafe { std::sync::Arc::from_raw(this.v as *const $t) };
+                                let arc = unsafe { strong_arc::Arc::from_raw(this.v as *const $t) };
                                 let res = $crate::ddval::DDVal {
-                                    v: std::sync::Arc::into_raw(arc.clone()) as usize,
+                                    v: strong_arc::Arc::into_raw(arc.clone()) as usize,
                                 };
-                                std::sync::Arc::into_raw(arc);
+                                strong_arc::Arc::into_raw(arc);
                                 res
                             }
                         };
@@ -402,7 +404,8 @@ macro_rules! decl_ddval_convert {
                                 };
                             // v's destructor will do the rest.
                             } else {
-                                let _arc = unsafe { std::sync::Arc::from_raw(this.v as *const $t) };
+                                let _arc =
+                                    unsafe { strong_arc::Arc::from_raw(this.v as *const $t) };
                                 // arc's destructor will do the rest.
                             }
                         };
