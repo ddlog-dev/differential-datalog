@@ -163,16 +163,14 @@ PODSUSEDPERNODE(node_name, pods):-
 	POD(.node_name = node_name, .pods_request = pods_request),
 	var pods = Aggregate((node_name), sum(pods_request)).
 
-SPARECAPACITY(node_name, cpu_remaining, memory_remaining, pods_remaining) :-
+#[multiway]
+SPARECAPACITY(node_name, cpu_allocatable-cpu, memory_allocatable-memory, pods_allocatable-pods) :-
 	POD(.node_name = node_name),
 	(istring_str(node_name) != "null"),
 	CPUUSEDPERNODE(node_name, cpu),
 	MEMORYUSEDPERNODE(node_name, memory),
 	PODSUSEDPERNODE(node_name, pods),
-	NODE(.name = node_name, .cpu_allocatable = cpu_allocatable, .memory_allocatable = memory_allocatable, .pods_allocatable = pods_allocatable),
-	var cpu_remaining = cpu_allocatable-cpu,
-	var memory_remaining =  memory_allocatable-memory,
-	var pods_remaining = pods_allocatable-pods.
+	NODE(.name = node_name, .cpu_allocatable = cpu_allocatable, .memory_allocatable = memory_allocatable, .pods_allocatable = pods_allocatable).
 
 PODSTOASSIGNNOLIMIT(pod_name, status, node_name, namespace, cpu_request, memory_request, ephemeral_storage_request, pods_request, owner_name, creation_timestamp, has_node_selector_labels, has_pod_affinity_requirements):-
 	POD(pod_name, status, node_name, namespace, cpu_request, memory_request, ephemeral_storage_request, pods_request, owner_name, creation_timestamp, priority, schedulerName, has_node_selector_labels, has_pod_affinity_requirements),
@@ -203,6 +201,7 @@ PODNODESELECTORMATCHESIN(pod_name, node_name):-
     var distinct_match_expression = Aggregate((pod_name, node_name, term, label_operator, num_match_expressions), count_uniq(match_expression)),
     (num_match_expressions == cast_bit64_to_signedbit64(distinct_match_expression)).
 
+#[multiway]
 PODNODESELECTORMATCHESNOT(pod_name, node_name):-
     PODSTOASSIGN(.pod_name = pod_name),
     NODELABELS(.node_name = node_name, .label_key = label_key_node, .label_value = label_value_node),
