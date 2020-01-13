@@ -719,6 +719,7 @@ Z(.field=(a.field + b.field)) :- X[(a@ X{.field=_})], X[(b@ X{.field=_})].
 Z(.field=(a.field + c.field)) :- X[(a@ X{.field=_})], X[(c@ X{.field=_})].
 Z(.field=(a + b)) :- X(.field=a), X(.field=b).
 Z(.field=(a + c)) :- X(.field=a), X(.field=c).
+#[multiway = true]
 Z(.field=(a + b)),
 Z(.field=(a + c)) :- X(.field=a), X(.field=b), X(.field=c).
 Z(.field=(a.field + b)) :- X[(a@ X{.field=_})], (var b: bigint) = (a.field + 2).

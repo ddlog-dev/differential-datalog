@@ -399,6 +399,7 @@ for (a in X) {
 Z(a+b) :- X(a), X(b).
 Z(a+c) :- X(a), X(c).
 // Equivalent to
+#[multiway]
 Z(a+b), Z(a+c) :- X(a), X(b), X(c).
 
 for (a in X)
