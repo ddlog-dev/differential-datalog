@@ -35,6 +35,8 @@ LabeledNode(node, node) :- DdlogNode(node), not SCCLabel[(node, _)].
  * connected by a DdlogDependency edge.
  */
 relation SCCEdge(parent: entid_t, child: entid_t)
+
+#[multiway]
 SCCEdge(parentscc,childscc) :-
     DdlogDependency(parent, child),
     LabeledNode(parent, parentscc),

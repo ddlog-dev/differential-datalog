@@ -208,6 +208,7 @@ Rout(.f1=q, .f2=x) :- Rmain(.f1=foolib.lib.Tlib{.f1=x}, .f2=foolib.ns1.m1.T1{.f1
 redist.BiEdge(.parent=parent, .child=child) :- redist.DdlogDependency(.parent=parent, .child=child), redist.DdlogDependency(.parent=child, .child=parent).
 redist.LabeledNode(.node=node, .scc=scc) :- redist.SCCLabel[(node, scc)].
 redist.LabeledNode(.node=node, .scc=node) :- redist.DdlogNode(.id=node), not redist.SCCLabel[(node, _)].
+#[multiway = true]
 redist.SCCEdge(.parent=parentscc, .child=childscc) :- redist.DdlogDependency(.parent=parent, .child=child), redist.LabeledNode(.node=parent, .scc=parentscc), redist.LabeledNode(.node=child, .scc=childscc), (childscc != parentscc).
 redist.SCCBinding(.scc=scc, .bindings=std.ref_new(bindings)) :- redist.DdlogBinding(.tn=tn, .entity=entity), redist.LabeledNode(.node=entity, .scc=scc), var bindings = Aggregate((scc), tinyset.group2set(tn)).
 redist.SCCSpan(.scc=scc, .span=bindings) :- redist.SCCBinding(.scc=scc, .bindings=bindings).
