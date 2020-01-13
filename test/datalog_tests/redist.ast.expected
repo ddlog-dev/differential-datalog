@@ -182,6 +182,7 @@ output relation Span [Span]
 BiEdge(.parent=parent, .child=child) :- DdlogDependency(.parent=parent, .child=child), DdlogDependency(.parent=child, .child=parent).
 LabeledNode(.node=node, .scc=scc) :- SCCLabel[(node, scc)].
 LabeledNode(.node=node, .scc=node) :- DdlogNode(.id=node), not SCCLabel[(node, _)].
+#[multiway = true]
 SCCEdge(.parent=parentscc, .child=childscc) :- DdlogDependency(.parent=parent, .child=child), LabeledNode(.node=parent, .scc=parentscc), LabeledNode(.node=child, .scc=childscc), (childscc != parentscc).
 SCCBinding(.scc=scc, .bindings=std.ref_new(bindings)) :- DdlogBinding(.tn=tn, .entity=entity), LabeledNode(.node=entity, .scc=scc), var bindings = Aggregate((scc), tinyset.group2set(tn)).
 SCCSpan(.scc=scc, .span=bindings) :- SCCBinding(.scc=scc, .bindings=bindings).
