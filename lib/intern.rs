@@ -8,9 +8,7 @@ use std::sync;
 use std::vec;
 
 #[cfg(feature = "flatbuf")]
-use flatbuf::{
-    FromFlatBuffer, ToFlatBuffer, ToFlatBufferTable, ToFlatBufferVectorElement
-};
+use flatbuf::{FromFlatBuffer, ToFlatBuffer, ToFlatBufferTable, ToFlatBufferVectorElement};
 
 /* `flatc`-generated declarations re-exported by `flatbuf.rs` */
 #[cfg(feature = "flatbuf")]
