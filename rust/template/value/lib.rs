@@ -34,7 +34,7 @@ use differential_datalog::record::IntoRecord;
 use differential_datalog::record::RelIdentifier;
 use differential_datalog::uint::*;
 
-use fnv::{FnvHashMap};
+use fnv::FnvHashMap;
 use lazy_static::lazy_static;
 
 use types::*;

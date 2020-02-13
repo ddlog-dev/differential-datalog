@@ -50,4 +50,3 @@ impl<T> Val for T where T: Eq + Ord + Clone + Hash + PartialEq + PartialOrd {}
 // Don't edit this line
 // Code below this point is needed to test-compile template
 // code and is not part of the template.
-

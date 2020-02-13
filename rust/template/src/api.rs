@@ -250,8 +250,9 @@ impl DDlog for HDDlog {
     #[cfg(feature = "flatbuf")]
     fn apply_updates_from_flatbuf(&self, buf: &[u8]) -> Result<(), String> {
         let cmditer = flatbuf::updates_from_flatbuf(buf)?;
-        let upds: Result<Vec<Update<DDValue>>, String> =
-            cmditer.map(|cmd| flatbuf::DDValueUpdate::from_flatbuf(cmd).map(|x|x.0)).collect();
+        let upds: Result<Vec<Update<DDValue>>, String> = cmditer
+            .map(|cmd| flatbuf::DDValueUpdate::from_flatbuf(cmd).map(|x| x.0))
+            .collect();
         self.apply_valupdates(upds?.into_iter())
     }
 
