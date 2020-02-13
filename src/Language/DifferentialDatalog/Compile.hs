@@ -103,22 +103,39 @@ gROUP_VAR = "__group__"
 fUNCS_RETURN_REF :: [String]
 fUNCS_RETURN_REF = ["std.deref"]
 
--- Rust imports
-header :: String -> Doc
-header specname =
-    let h = case splitOn "/*- !!!!!!!!!!!!!!!!!!!! -*/"
-                 $ BS.unpack $ $(embedFile "rust/template/src/lib.rs") of
+-- Extract static template header before the "/*- !!!!!!!!!!!!!!!!!!!! -*/"
+-- separator from file; substitute "datalog_example" with 'specname' in
+-- the header.
+header :: String -> String -> Doc
+header template specname =
+    let h = case splitOn "/*- !!!!!!!!!!!!!!!!!!!! -*/" template of
                 []  -> error "Missing separator in lib.rs"
                 x:_ -> x
     in pp $ replace "datalog_example" specname h
 
--- Cargo.toml
-cargo :: String -> Doc -> [String] -> Doc
-cargo specname toml_code crate_types =
+-- 'types' crate containing DDlog type declarations.
+typesHeader :: String -> Doc
+typesHeader specname = header (BS.unpack $ $(embedFile "rust/template/types/lib.rs")) specname
+
+-- 'value' crate that declares relations and value types.
+valueHeader :: String -> Doc
+valueHeader specname = header (BS.unpack $ $(embedFile "rust/template/value/lib.rs")) specname
+
+-- Main crate containing compiled program rules.
+mainHeader :: String -> Doc
+mainHeader specname = header (BS.unpack $ $(embedFile "rust/template/src/lib.rs")) specname
+
+-- Top-level 'Cargo.toml'.
+mainCargo :: String -> [String] -> Doc
+mainCargo specname crate_types =
     (pp $ replace "datalog_example" specname $ BS.unpack $ $(embedFile "rust/template/Cargo.toml")) $$
-    "crate-type = [" <> (hsep $ punctuate "," $ map (\t -> "\"" <> pp t <> "\"") $ "rlib" : crate_types) <> "]" $$
-    "" $$
-    toml_code
+    "crate-type = [" <> (hsep $ punctuate "," $ map (\t -> "\"" <> pp t <> "\"") $ "rlib" : crate_types) <> "]"
+
+-- 'types/Cargo.toml' - imports Rust dependencies.
+typesCargo :: String -> Doc -> Doc
+typesCargo specname toml_code =
+    (pp $ replace "datalog_example" specname $ BS.unpack $ $(embedFile "rust/template/types/Cargo.toml")) $$
+    "" $$ toml_code
 
 rustProjectDir :: String -> String
 rustProjectDir specname = specname ++ "_ddlog"
@@ -189,6 +206,7 @@ rustLibFiles specname =
         , (dir </> "ovsdb/Cargo.toml"                                , $(embedFile "rust/template/ovsdb/Cargo.toml"))
         , (dir </> "ovsdb/lib.rs"                                    , $(embedFile "rust/template/ovsdb/lib.rs"))
         , (dir </> "ovsdb/test.rs"                                   , $(embedFile "rust/template/ovsdb/test.rs"))
+        , (dir </> "value/Cargo.toml"                                , $(embedFile "rust/template/value/Cargo.toml"))
         , (dir </> ".cargo/config"                                   , $(embedFile "rust/template/.cargo/config"))
         ]
     where dir = rustProjectDir specname
@@ -460,7 +478,7 @@ compile d_unoptimized specname rs_code toml_code dir crate_types = do
                (depGraphToDot $ progDependencyGraph d_unoptimized)
     -- Apply optimizations; make sure the program has at least one relation.
     let d = addDummyRel $ optimize d_unoptimized
-    let lib = compileLib d specname rs_code
+    let (types, value, main) = compileLib d specname rs_code
     when (cconfJava ?cfg) $
         compileFlatBufferBindings d specname (dir </> rustProjectDir specname)
     -- Substitute specname template files; write files if changed.
@@ -474,26 +492,37 @@ compile d_unoptimized specname rs_code toml_code dir crate_types = do
             let path' = dir </> path
             updateFile path' content)
          $ rustLibFiles specname
-    -- Generate lib.rs file if changed.
-    updateFile (dir </> rustProjectDir specname </> "Cargo.toml") (render $ cargo specname toml_code crate_types)
-    updateFile (dir </> rustProjectDir specname </> "src/lib.rs") (render lib)
+    -- Generate lib files if changed.
+    updateFile (dir </> rustProjectDir specname </> "types/Cargo.toml") (render $ typesCargo specname toml_code)
+    updateFile (dir </> rustProjectDir specname </> "types/lib.rs")     (render types)
+    updateFile (dir </> rustProjectDir specname </> "value/lib.rs")     (render value)
+    updateFile (dir </> rustProjectDir specname </> "Cargo.toml")       (render $ mainCargo specname crate_types)
+    updateFile (dir </> rustProjectDir specname </> "src/lib.rs")       (render main)
     return ()
 
--- | Compile Datalog program into Rust code that creates 'struct Program' representing
--- the program for the Rust Datalog library
-compileLib :: (?cfg::CompilerConfig) => DatalogProgram -> String -> Doc -> Doc
-compileLib d specname rs_code =
-    header specname             $+$
-    rs_code                     $+$
-    typedefs                    $+$
-    mkValueFromRecord d         $+$ -- Function to convert cmd_parser::Record to Value
-    mkIndexesIntoArrId d cstate $+$
-    mkRelEnum d                 $+$ -- `enum Relations`
-    mkIdxEnum d                 $+$ -- `enum Indexes`
-    valtype                     $+$
-    funcs                       $+$
-    prog
+-- | Compile Datalog program into Rust code.
+--
+-- Returns Rust code for three crates that comp:
+-- * 'types' crate containing DDlog type declarations and all imported Rust
+--    library code.
+-- * 'value' crate that declares relations and value types.
+-- * 'main' crate that contains rule definitions in Rust and imports the other two.
+--
+compileLib :: (?cfg::CompilerConfig) => DatalogProgram -> String -> Doc -> (Doc, Doc, Doc)
+compileLib d specname rs_code = (typesLib, valueLib, mainLib)
     where
+    typesLib = typesHeader specname         $+$
+               rs_code                      $+$
+               typedefs
+    valueLib = valueHeader specname         $+$
+               mkValType d (cTypes cstate)  $+$ -- 'Value' enum type
+               mkValueFromRecord d          $+$ -- Function to convert cmd_parser::Record to Value
+               mkIndexesIntoArrId d cstate  $+$
+               mkRelEnum d                  $+$ -- 'enum Relations'
+               mkIdxEnum d                      -- 'enum Indexes'
+    mainLib = mainHeader specname           $+$
+              funcs                         $+$
+              prog
     -- Compute ordered SCCs of the dependency graph.  These will define the
     -- structure of the program.
     depgraph = progDependencyGraph d
@@ -516,9 +545,7 @@ compileLib d specname rs_code =
     typedefs = vcat $ map (mkTypedef d) $ M.elems $ progTypedefs d
     -- Functions
     (fdef, fextern) = partition (isJust . funcDef) $ M.elems $ progFunctions d
-    funcs = vcat $ (map (mkFunc d) fextern ++ map (mkFunc d) fdef)
-    -- 'Value' enum type
-    valtype = mkValType d (cTypes cstate)
+    funcs = vcat $ (map (mkFunc d) fextern ++ map (mkFunc d) fdef) 
 
 -- Add dummy relation to the spec if it does not contain any.
 -- Otherwise, we have to tediously handle this corner case in various
@@ -541,7 +568,7 @@ mkTypedef d tdef@TypeDef{..} =
          Just TStruct{..} | length typeCons == 1
                           -> derive_struct                                                             $$
                              "pub struct" <+> rname tdefName <> targs <+> "{"                          $$
-                             (nest' $ vcat $ punctuate comma $ map mkField $ consArgs $ head typeCons) $$
+                             (nest' $ vcat $ punctuate comma $ map (mkField True) $ consArgs $ head typeCons) $$
                              "}"                                                                       $$
                              impl_abomonate                                                            $$
                              mkFromRecord tdef                                                         $$
@@ -578,12 +605,12 @@ mkTypedef d tdef@TypeDef{..} =
                    else "<" <> (hsep $ punctuate comma $ map ((<> ": Default") . pp) tdefArgs) <> ">"
 
 
-    mkField :: Field -> Doc
-    mkField f = pp (name f) <> ":" <+> mkType f
+    mkField :: Bool -> Field -> Doc
+    mkField pub f = (if pub then "pub" else empty) <+> pp (name f) <> ":" <+> mkType f
 
     mkConstructor :: Constructor -> Doc
     mkConstructor c =
-        let args = vcat $ punctuate comma $ map mkField $ consArgs c in
+        let args = vcat $ punctuate comma $ map (mkField False) $ consArgs c in
         if null $ consArgs c
            then rname (name c)
            else rname (name c) <+> "{" $$

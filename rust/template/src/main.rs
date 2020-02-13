@@ -22,6 +22,7 @@ use differential_datalog::DDlog;
 use num_traits::cast::ToPrimitive;
 use rustop::opts;
 use time::precise_time_ns;
+use value::*;
 
 #[cfg(feature = "profile")]
 use cpuprofiler::PROFILER;

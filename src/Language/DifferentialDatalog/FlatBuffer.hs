@@ -93,7 +93,7 @@ compileFlatBufferBindings prog specname dir = do
     -- Copy generated file if it's changed (we could generate it in place, but
     -- flatc always overwrites its output, forcing Rust re-compilation)
     fbgenerated <- readFile $ flatbuf_dir </> "flatbuf_generated.rs"
-    updateFile (dir </> "src" </> "flatbuf_generated.rs") fbgenerated
+    updateFile (dir </> "types" </> "flatbuf_generated.rs") fbgenerated
 
 -- | Checks that we are able to generate FlatBuffer schema for all types used in
 -- program's input and output relations.
@@ -163,23 +163,27 @@ compileFlatBufferSchema d prog_name =
     "}"                                                                         $$
     "root_type __Commands;"
 
--- | Generate FlatBuffer Rust bindings.
+-- | Generate FlatBuffer Rust bindings, including:
+-- * `types/flatbuf.rs` - flabuf-related traits (`ToFlatBuffer`, `FromFlatBuffer`, ...)
+--                        and their implementation for all standard, library,
+--                        user-defined types.
+-- * `value/flatbuf.rs` - serialize commands to/from flatbuffers.
 compileFlatBufferRustBindings :: (?cfg::R.CompilerConfig) => DatalogProgram -> String -> FilePath ->  IO ()
 compileFlatBufferRustBindings d prog_name dir = do
     let ?d = d
     let ?prog_name = prog_name
-    let rust_template = replace "datalog_example" prog_name $ BS.unpack $(embedFile "rust/template/src/flatbuf.rs")
-    updateFile (dir </> "src/flatbuf.rs") $ render $
-        (pp rust_template)                                              $$
-        "use flatbuf_generated::ddlog::" <> rustFBModule <+> " as fb;"  $$
-        -- Re-export '__String', so we can use it to implement 'To/FromFlatBuf'
-        -- for 'IString' in 'intern.rs'.
-        "pub use flatbuf_generated::ddlog::" <> rustFBModule <+> "::__String;"  $$
-        rustValueFromFlatbuf                                            $$
+    let types_template = replace "datalog_example" prog_name $ BS.unpack $(embedFile "rust/template/types/flatbuf.rs")
+    let value_template = replace "datalog_example" prog_name $ BS.unpack $(embedFile "rust/template/value/flatbuf.rs")
+    updateFile (dir </> "types/flatbuf.rs") $ render $
+        (pp types_template)                                              $$
+        "pub use flatbuf_generated::ddlog::" <> rustFBModule <+> " as fb;"   $$
         (vcat $ map rustTypeFromFlatbuf
               -- One FromFlatBuffer implementation per Rust type
               $ nubBy (\t1 t2 -> R.mkType t1 == R.mkType t2)
               $ progRustTypesToSerialize)
+    updateFile (dir </> "value/flatbuf.rs") $ render $
+        (pp value_template)                                              $$
+        rustValueFromFlatbuf
 
 -- | Generate Java convenience API that provides a type-safe way to serialize/deserialize
 -- commands to a FlatBuffer.
