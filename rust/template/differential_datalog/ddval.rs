@@ -97,6 +97,81 @@ pub struct DDValMethods {
     pub ddval_serialize: fn(this: &DDVal) -> &dyn DDValSerialize,
 }
 
+impl Default for DDValue {
+    fn default() -> Self {
+        const VTABLE: DDValMethods = DDValMethods {
+            clone: {
+                fn __f(_this: &DDVal) -> DDVal {
+                    DDVal { v: 0 }
+                };
+                __f
+            },
+            into_record: {
+                fn __f(_this: DDVal) -> Record {
+                    Record::Bool(false)
+                };
+                __f
+            },
+            eq: {
+                fn __f(_this: &DDVal, _other: &DDVal) -> bool {
+                    panic!("DDValue::default() eq not implemented")
+                };
+                __f
+            },
+            partial_cmp: {
+                fn __f(_this: &DDVal, _other: &DDVal) -> Option<std::cmp::Ordering> {
+                    panic!("DDValue::default() patial_cmp not implemented")
+                };
+                __f
+            },
+            cmp: {
+                fn __f(_this: &DDVal, _other: &DDVal) -> std::cmp::Ordering {
+                    panic!("DDValue::default() cmp not implemented")
+                };
+                __f
+            },
+            hash: {
+                fn __f(_this: &DDVal, mut _state: &mut dyn std::hash::Hasher) {
+                    panic!("DDValue::default() hash not implemented")
+                };
+                __f
+            },
+            mutate: {
+                fn __f(_this: &mut DDVal, _record: &Record) -> Result<(), std::string::String> {
+                    Ok(())
+                };
+                __f
+            },
+            fmt_debug: {
+                fn __f(_this: &DDVal, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+                    std::fmt::Debug::fmt("()", f)
+                };
+                __f
+            },
+            fmt_display: {
+                fn __f(_this: &DDVal, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+                    std::fmt::Display::fmt("()", f)
+                };
+                __f
+            },
+            drop: {
+                fn __f(_this: &mut DDVal) {};
+                __f
+            },
+            ddval_serialize: {
+                fn __f(_this: &DDVal) -> &dyn DDValSerialize {
+                    panic!("calling ddval_serialize on DDValue::default()")
+                };
+                __f
+            },
+        };
+        DDValue {
+            val: DDVal { v: 0 },
+            vtable: &VTABLE,
+        }
+    }
+}
+
 impl Drop for DDValue {
     fn drop(&mut self) {
         (self.vtable.drop)(&mut self.val);

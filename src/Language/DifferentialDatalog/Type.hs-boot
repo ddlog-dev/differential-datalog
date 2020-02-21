@@ -21,3 +21,4 @@ gROUP_TYPE :: String
 checkIterable :: (MonadError String me, WithType a) => String -> Pos -> DatalogProgram -> a -> me ()
 typeIterType :: DatalogProgram -> Type -> Maybe Type
 exprTypeMaybe :: DatalogProgram -> ECtx -> Expr -> Maybe Type
+fieldsValidate :: (MonadError String me) => DatalogProgram -> [String] -> [Field] -> me ()

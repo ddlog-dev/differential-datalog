@@ -35,6 +35,7 @@ SOFTWARE.
 
 module Language.DifferentialDatalog.Syntax (
         Attribute(..),
+        ppAttributes,
         Type(..),
         typeTypeVars,
         tBool,
@@ -176,6 +177,10 @@ instance PP Attribute where
 
 instance Show Attribute where
     show = render . pp
+
+ppAttributes :: [Attribute] -> Doc
+ppAttributes [] = empty
+ppAttributes attrs = "#[" <> (commaSep $ map pp attrs) <> "]"
 
 data Field = Field { fieldPos  :: Pos
                    , fieldAttrs:: [Attribute]

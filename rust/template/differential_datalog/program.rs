@@ -25,8 +25,6 @@ use std::sync::{Arc, Barrier, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use abomonation::Abomonation;
-
 use num_traits::identities::One;
 use num_traits::ops::saturating::Saturating;
 
@@ -237,14 +235,14 @@ pub type SemijoinFunc = fn(&DDValue, &DDValue, &()) -> Option<DDValue>;
 pub type AggFunc = fn(&DDValue, &[(&DDValue, Weight)]) -> DDValue;
 
 /// (see `DeltaOp::Join`)
-pub type ProposeFunc<V> = fn((V, V)) -> Option<V>;
+pub type ProposeFunc = fn((DDValue, DDValue)) -> Option<DDValue>;
 
 /// (see `DeltaOp::Semijoin`)
-pub type SemiProposeFunc<V> = fn((V, ())) -> Option<V>;
+pub type SemiProposeFunc = fn((DDValue, ())) -> Option<DDValue>;
 
 /// Like `MapFunc`, but operates on a reference
 /// (see `DeltaOp::Join`)
-pub type RefMapFunc<V> = fn(&V) -> V;
+pub type RefMapFunc = fn(&DDValue) -> DDValue;
 
 /// A Datalog relation or rule can depend on other relations and their
 /// arrangements.
@@ -475,41 +473,41 @@ pub enum OldNew {
 }
 
 #[derive(Clone)]
-pub struct DeltaRule<V: Val> {
+pub struct DeltaRule {
     pub rel: RelId,
-    pub fmfun: &'static FilterMapFunc<V>,
-    pub ops: Vec<DeltaOp<V>>,
+    pub fmfun: &'static FilterMapFunc,
+    pub ops: Vec<DeltaOp>,
 }
 
 #[derive(Clone)]
-pub enum DeltaOp<V: Val> {
+pub enum DeltaOp {
     /// Join an input collection (that contains changes computed so far) with
     /// matching elements of an arrangement and filter results through a function.
     Join {
         /// Extract key from input collection
-        keyfunc: &'static RefMapFunc<V>,
+        keyfunc: &'static RefMapFunc,
         arrangement: ArrId,
         /// `Old` - delay arrangement by one timestamp
         timestamp: OldNew,
         /// Map a pair of values (from the input collection and the arrangement)
         /// into proposed output value
-        pfunc: &'static ProposeFunc<V>,
+        pfunc: &'static ProposeFunc,
     },
     /// Semijoin an input collection (that contains changes computed so far) with
     /// matching elements of an arrangement and filter results through a function.
     Semijoin {
         /// Extract key from input collection
-        keyfunc: &'static RefMapFunc<V>,
+        keyfunc: &'static RefMapFunc,
         arrangement: ArrId,
         /// `Old` - delay arrangement by one timestamp
         timestamp: OldNew,
         /// Map a value from the input collection into proposed output value
-        pfunc: &'static SemiProposeFunc<V>,
+        pfunc: &'static SemiProposeFunc,
     },
 }
 //                  | DeltaAntijoin<V>
 
-impl<V: Val> DeltaOp<V> {
+impl DeltaOp {
     fn arrangement(&self) -> ArrId {
         match self {
             DeltaOp::Join { arrangement, .. } => *arrangement,
@@ -525,7 +523,7 @@ impl<V: Val> DeltaOp<V> {
     }
 }
 
-impl<V: Val> DeltaRule<V> {
+impl DeltaRule {
     fn dependencies(&self) -> BTreeSet<Dep> {
         let mut deps = BTreeSet::new();
         deps.insert(Dep::Rel(self.rel));
@@ -559,7 +557,7 @@ pub enum Rule {
     },
     DeltaRule {
         description: String,
-        deltas: Vec<DeltaRule<V>>,
+        deltas: Vec<DeltaRule>,
     },
 }
 
@@ -2002,12 +2000,7 @@ impl Program {
     /* Compile right-hand-side of a rule to a collection */
     fn mk_rule<'a, 'b, 'c, P, T, F>(
         &self,
-<<<<<<< HEAD
-        scope: &mut Child<'c, P, T>,
         rule: &Rule,
-=======
-        rule: &Rule<V>,
->>>>>>> program.rs: Supply addiional argument to enter_at().
         lookup_collection: F,
         arrangements: Arrangements<'c, 'b, P, T>,
     ) -> Collection<Child<'c, P, T>, DDValue, Weight>
@@ -2055,15 +2048,15 @@ impl Program {
     fn mk_rule_outer<'a, 'b, 'c, P, T, F>(
         &self,
         scope: &mut Child<'c, P, T>,
-        rule: &Rule<V>,
+        rule: &Rule,
         lookup_collection: F,
-        arrangements: Arrangements<'c, 'b, V, P, T>,
-    ) -> Collection<Child<'c, P, T>, V, Weight>
+        arrangements: Arrangements<'c, 'b, P, T>,
+    ) -> Collection<Child<'c, P, T>, DDValue, Weight>
     where
         P: ScopeParent + 'a,
         P::Timestamp: Lattice,
         T: Refines<P::Timestamp> + Lattice + Saturating + One + Timestamp + Ord,
-        F: Fn(RelId) -> Option<&'b Collection<Child<'c, P, T>, V, Weight>>,
+        F: Fn(RelId) -> Option<&'b Collection<Child<'c, P, T>, DDValue, Weight>>,
         'a: 'b,
     {
         match rule {
@@ -2133,13 +2126,13 @@ impl Program {
                             }
                         }
                         for (arr, ts) in arrdeps.iter() {
-                            let alt: for<'r, 's, 't0> fn(&'r V, &'s V, &'t0 T) -> _ =
+                            let alt: for<'r, 's, 't0> fn(&'r DDValue, &'s DDValue, &'t0 T) -> _ =
                                 |_, _, t| AltNeu::alt(t.clone());
-                            let neu: for<'r, 's, 't0> fn(&'r V, &'s V, &'t0 T) -> _ =
+                            let neu: for<'r, 's, 't0> fn(&'r DDValue, &'s DDValue, &'t0 T) -> _ =
                                 |_, _, t| AltNeu::neu(t.clone());
-                            let semi_alt: for<'r, 's, 't0> fn(&'r V, &'s (), &'t0 T) -> _ =
+                            let semi_alt: for<'r, 's, 't0> fn(&'r DDValue, &'s (), &'t0 T) -> _ =
                                 |_, _, t| AltNeu::alt(t.clone());
-                            let semi_neu: for<'r, 's, 't0> fn(&'r V, &'s (), &'t0 T) -> _ =
+                            let semi_neu: for<'r, 's, 't0> fn(&'r DDValue, &'s (), &'t0 T) -> _ =
                                 |_, _, t| AltNeu::neu(t.clone());
                             match arrangements.lookup_arr(*arr) {
                                 A::Arrangement1(ArrangedCollection::Map(arranged)) => match ts {
