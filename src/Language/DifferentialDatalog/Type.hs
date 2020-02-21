@@ -56,7 +56,8 @@ module Language.DifferentialDatalog.Type(
     rEF_TYPE,
     checkIterable,
     typeIterType,
-    typeValidate
+    typeValidate,
+    fieldsValidate
 ) where
 
 import Data.Maybe

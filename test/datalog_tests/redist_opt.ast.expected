@@ -218,11 +218,13 @@ relation ValidDependency [ValidDependency]
 index ExtDdlogDependency_by_child (child: entid_t) on ExtDdlogDependency(.parent=_, .child=child)
 index ExtDdlogDependency_by_parent (parent: entid_t) on ExtDdlogDependency(.parent=parent, .child=_)
 index Span_by_entity (entity: entid_t) on Span(.entity=entity, .tns=_)
+#[multiway = true]
 ValidDependency(.parent=parent, .child=child) :- DdlogDependency(.parent=parent, .child=child), DdlogNode(.id=parent, .etype=_), DdlogNode(.id=child, .etype=_).
 ExtDdlogDependency(.parent=parent, .child=child) :- ValidDependency(.parent=parent, .child=child).
 ExtDdlogDependency(.parent=ls, .child=lsp) :- ValidDependency(.parent=lsp, .child=lrp), DdlogNode(.id=lrp, .etype=EntityLRP{}), DdlogNode(.id=lsp, .etype=EntityLSP{.connected_to_dr=true}), ValidDependency(.parent=lsp, .child=ls), DdlogNode(.id=ls, .etype=EntityLS{}).
 LabeledNode(.node=node, .scc=scc) :- SCCLabel[(node, scc)].
 LabeledNode(.node=node, .scc=node) :- DdlogNode(.id=node, .etype=_), not SCCLabel[(node, _)].
+#[multiway = true]
 SCCEdge(.parent=parentscc, .child=childscc) :- ExtDdlogDependency(.parent=parent, .child=child), LabeledNode(.node=parent, .scc=parentscc), LabeledNode(.node=child, .scc=childscc), (childscc != parentscc).
 SCCBinding(.scc=scc, .bindings=std.ref_new(bindings)) :- DdlogBinding(.tn=tn, .entity=entity), LabeledNode(.node=entity, .scc=scc), var bindings = Aggregate((scc), tinyset.group2set(tn)).
 SCCSpan(.scc=scc, .span=bindings) :- SCCBinding(.scc=scc, .bindings=bindings).

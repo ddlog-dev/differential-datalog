@@ -39,7 +39,6 @@ module Language.DifferentialDatalog.Rule (
     ruleIsDistinctByConstruction,
     ruleIsRecursive,
     ruleIsMultiway,
-    indexValidate,
     ruleValidate,
     atomValidate,
     ruleMoveRHSLeft,
@@ -106,7 +105,7 @@ ruleRHSVarSet' d rl i =
                                                          TOpaque _ tname     [kt,vt] | tname == mAP_TYPE
                                                                                      -> tTuple [kt,vt]
                                                          t' -> error $ "Rule.ruleRHSVarSet': unexpected FlatMap type " ++ show t'
-                                            in S.insert (Field nopos v t) vs
+                                            in S.insert (Field nopos [] v t) vs
          -- Aggregation hides all variables except groupBy vars
          -- and the aggregate variable
          RHSAggregate _ avar gvars fname _ -> let ctx = CtxRuleRAggregate rl i
@@ -255,21 +254,6 @@ ruleIsRecursive d Rule{..} head_idx =
 -- | 'True' iff the rule must be evaluated as a multiway join.
 ruleIsMultiway :: Rule -> Bool
 ruleIsMultiway = any ((== rULE_ATTR_MULTIWAY) . name) . ruleAttrs
-
-indexValidate :: (MonadError String me) => DatalogProgram -> Index -> me ()
-indexValidate d idx@Index{..} = do
-    fieldsValidate d [] idxVars
-    atomValidate d (CtxIndex idx) idxAtom
-    check (exprIsPatternImpl $ atomVal idxAtom) (pos idxAtom)
-          $ "Index expression is not a pattern"
-    -- Atom is defined over exactly the variables in the index.
-    -- (variables in 'atom_vars \\ idx_vars' should be caught by 'atomValidate'
-    -- above, so we only need to check for 'idx_vars \\ atom_vars' here).
-    let idx_vars = map name idxVars
-    let atom_vars = exprFreeVars d (CtxIndex idx) (atomVal idxAtom)
-    check (null $ idx_vars \\ atom_vars) (pos idx)
-          $ "The following index variables are not constrained by the index pattern: " ++
-            (show $ idx_vars \\ atom_vars)
 
 ruleValidate :: (MonadError String me) => DatalogProgram -> Rule -> me ()
 ruleValidate d rl@Rule{..} = do

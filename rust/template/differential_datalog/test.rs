@@ -17,10 +17,7 @@ use std::collections::btree_set::BTreeSet;
 use std::iter::FromIterator;
 use std::sync::{Arc, Mutex};
 
-use abomonation::Abomonation;
 use fnv::FnvHashSet;
-use serde::Deserialize;
-use serde::Serialize;
 use timely::communication::Allocator;
 use timely::dataflow::scopes::*;
 use timely::worker::Worker;
@@ -34,273 +31,11 @@ use crate::test_value::*;
 
 const TEST_SIZE: u64 = 1000;
 
-#[derive(Eq, Ord, Clone, Hash, PartialEq, PartialOrd, Serialize, Deserialize, Debug)]
-struct P {
-    f1: Q,
-    f2: bool,
-}
-
-impl Abomonation for P {}
-
-#[derive(Eq, Ord, Clone, Hash, PartialEq, PartialOrd, Serialize, Deserialize, Debug)]
-struct Q {
-    f1: bool,
-    f2: String,
-}
-
-impl Abomonation for Q {}
-
-#[derive(Eq, Ord, Clone, Hash, PartialEq, PartialOrd, Serialize, Deserialize, Debug)]
-enum S {
-    S1 {
-        f1: u32,
-        f2: String,
-        f3: Q,
-        f4: Uint,
-    },
-    S2 {
-        e1: bool,
-    },
-    S3 {
-        g1: Q,
-        g2: Q,
-    },
-}
-
-impl Abomonation for S {}
-
-impl S {
-    fn f1(&mut self) -> &mut u32 {
-        match self {
-            S::S1 { ref mut f1, .. } => f1,
-            _ => panic!(""),
-        }
-    }
-}
-
-#[derive(Eq, Ord, Clone, Hash, PartialEq, PartialOrd, Serialize, Deserialize, Debug)]
-enum Value {
-    empty(),
-    bool(bool),
-    Uint(Uint),
-    String(String),
-    u8(u8),
-    u16(u16),
-    u32(u32),
-    u64(u64),
-    i64(i64),
-    BoolTuple((bool, bool)),
-    Tuple2(Box<Value>, Box<Value>),
-    Tuple3(Box<Value>, Box<Value>, Box<Value>),
-    Q(Q),
-    S(S),
-}
-
-impl Abomonation for Value {}
-
-impl Default for Value {
-    fn default() -> Value {
-        Value::bool(false)
-    }
-}
-
-impl Display for Value {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str("test::Value")
-    }
-}
-
-fn _filter_fun1(v: &Value) -> bool {
-    match &v {
-        Value::S(S::S1 { .. }) => true,
-        _ => false,
-    }
-}
-
-fn filter_map_ident(v: Value) -> Option<Value> {
+fn filter_map_ident(v: DDValue) -> Option<DDValue> {
     Some(v)
 }
 
-fn some_fun(x: &u32) -> u32 {
-    (*x) + 1
-}
-
-fn _arrange_fun1(v: Value) -> Option<(Value, Value)> {
-    let (x, _2) = match &v {
-        Value::S(S::S1 {
-            f1: ref x,
-            f2: _0,
-            f3: _2,
-            f4: _3,
-        }) if *_0 == "foo".to_string() && *_3 == (Uint::from_u64(32) & Uint::from_u64(0xff)) => {
-            (x, _2)
-        }
-        _ => return None,
-    };
-    if (*_2).f1 && (*x) + 1 > 5 {
-        return None;
-    };
-    if some_fun(x) > 5 {
-        return None;
-    };
-    if some_fun(&((*x) + 1)) > 5 {
-        return None;
-    };
-    if {
-        let y = 5;
-        some_fun(&y) > 5
-    } {
-        return None;
-    };
-    if {
-        let x = 0;
-        x < 4
-    } {
-        return None;
-    };
-    if (*_2
-        == Q {
-            f1: _2.f1,
-            f2: _2.f2.clone(),
-        })
-    {
-        return None;
-    };
-    if {
-        let v = &((*x) + 1);
-        (*v) > 0
-    } {
-        return None;
-    };
-    if {
-        let v = &(*_2).f1;
-        *v
-    } {
-        return None;
-    };
-    if {
-        let V = _2.f1;
-        V
-    } {
-        return None;
-    };
-    if {
-        let s = &mut S::S1 {
-            f1: 0,
-            f2: "foo".to_string(),
-            f3: Q {
-                f1: true,
-                f2: "bar".to_string(),
-            },
-            f4: Uint::from_u64(10),
-        };
-        *s.f1() = 5;
-        let q = s.f1();
-        (*q) > 0
-        //q == Q{f1: false, f2: "buzz".to_string()}
-    } {
-        return None;
-    };
-    if {
-        let ref mut p = P {
-            f1: Q {
-                f1: true,
-                f2: "x".to_string(),
-            },
-            f2: true,
-        };
-        let ref mut b = false;
-        p.f1 = Q {
-            f1: true,
-            f2: "x".to_string(),
-        };
-        let ref mut _pf1 = p.f1.clone();
-        let ref mut _pf11 = p.f1.clone();
-        let ref mut _pf2 = p.f1.f1 || p.f1.f1;
-        let ref mut _pf22 = p.f2.clone();
-        let ref mut z = true;
-        let ref mut _pclone = p.clone();
-        let Q {
-            f1: ref mut qf1,
-            f2: ref mut qf2,
-        } = p.f1.clone();
-        *qf1 = true;
-        let ref mut neq = Q {
-            f1: *qf1,
-            f2: qf2.clone(),
-        };
-        *z = true;
-
-        //*f2 = false.clone();
-        //*f1 = Q{f1: true, f2: "x".to_string()};
-        let (ref mut _v1, ref mut _v2): (Q, bool) = (
-            Q {
-                f1: true,
-                f2: "x".to_string(),
-            },
-            false,
-        );
-        (*b) = false;
-
-        let ref mut s = S::S1 {
-            f1: 0,
-            f2: "f2".to_string(),
-            f3: neq.clone(),
-            f4: Uint::from_u64(10),
-        };
-        match s {
-            S::S1 { f1, .. } => {
-                *f1 = 2;
-            }
-            _ => return None,
-        };
-        /*
-        match p {
-            P{f1, f2: true} => *f1 = p.f1.clone(),
-            _               => return None
-        };*/
-        /*match &mut p.f1 {
-            Q{f1: true, f2} => *f2 = p.f1.f2.clone(),
-            _               => return None
-        };*/
-        let ref mut a: u64 = 5 as u64;
-        let ref mut b: u64 = 5;
-        let ref mut _c: u64 = *(a) + *(b);
-        *a = *a + *a + *a;
-        let ref mut str1: String = ("str1".to_string()) as String;
-        let ref mut str2 = "str2".to_string();
-        let ref mut _str3 = (*str1).push_str(str2.as_str());
-        let (ref mut _str4, _) = ("str4".to_string(), "str5".to_string());
-        match &(a, b) {
-            (5, _) => (),
-            _ => return None,
-        }
-        *z
-    } {
-        return None;
-    };
-    match *_2 {
-        Q { f1: true, .. } => {}
-        _ => return None,
-    }
-    Some((
-        Value::S(S::S3 {
-            g1: _2.clone(),
-            g2: _2.clone(),
-        }),
-        v.clone(),
-    ))
-}
-
-/*
-fn arrange_fun1(v: Value) -> Option<(Value, Value)> {
-    match v {
-        Value::Tuple2(v1,v2) => Some((*v1, *v2)),
-        _ => None
-    }
-}*/
-
-type Delta = BTreeMap<Value, Weight>;
+type Delta<T> = BTreeMap<T, Weight>;
 
 fn set_update<T>(_rel: &str, s: &Arc<Mutex<Delta<T>>>, x: &DDValue, w: Weight)
 where
@@ -822,7 +557,7 @@ fn test_join(nthreads: usize) {
 
     fn join_transformer() -> Box<
         dyn for<'a> Fn(
-            &mut BTreeMap<RelId, Collection<Child<'a, Worker<Allocator>, TS>, Value, Weight>>,
+            &mut BTreeMap<RelId, Collection<Child<'a, Worker<Allocator>, TS>, DDValue, Weight>>,
         ),
     > {
         Box::new(|collections| {
@@ -1063,7 +798,7 @@ fn test_antijoin_multi() {
 /* Delta queries 1
  */
 fn test_delta(nthreads: usize) {
-    let relset1: Arc<Mutex<Delta>> = Arc::new(Mutex::new(BTreeMap::default()));
+    let relset1: Arc<Mutex<Delta<Tuple2<U64>>>> = Arc::new(Mutex::new(BTreeMap::default()));
     let rel1 = {
         let relset1 = relset1.clone();
         Relation {
@@ -1076,22 +811,22 @@ fn test_delta(nthreads: usize) {
             arrangements: vec![
                 Arrangement::Map {
                     name: "(_0,_)".to_string(),
-                    afun: &(afun1 as ArrangeFunc<Value>),
+                    afun: &(afun1 as ArrangeFunc),
                     queryable: false,
                 },
                 Arrangement::Map {
                     name: "(_,_0)".to_string(),
-                    afun: &(afun2 as ArrangeFunc<Value>),
+                    afun: &(afun2 as ArrangeFunc),
                     queryable: false,
                 },
                 Arrangement::Map {
                     name: "(_0,_1)".to_string(),
-                    afun: &(afun3 as ArrangeFunc<Value>),
+                    afun: &(afun3 as ArrangeFunc),
                     queryable: false,
                 },
                 Arrangement::Map {
                     name: "(_1,_0)".to_string(),
-                    afun: &(afun4 as ArrangeFunc<Value>),
+                    afun: &(afun4 as ArrangeFunc),
                     queryable: false,
                 },
             ],
@@ -1100,53 +835,40 @@ fn test_delta(nthreads: usize) {
             })))),
         }
     };
-    fn afun1(v: Value) -> Option<(Value, Value)> {
-        let (v1, v) = match &v {
-            Value::Tuple2(v1, _) => ((**v1).clone(), v.clone()),
-            _ => return None,
-        };
-        Some((v1, v))
+    fn afun1(v: DDValue) -> Option<(DDValue, DDValue)> {
+        let Tuple2(v1, _) = unsafe { Tuple2::<U64>::from_ddvalue_ref(&v) };
+        Some((v1.clone().into_ddvalue(), v.clone()))
     }
-    fn afun2(v: Value) -> Option<(Value, Value)> {
-        let (v2, v) = match &v {
-            Value::Tuple2(_, v2) => ((**v2).clone(), v.clone()),
-            _ => return None,
-        };
-        Some((v2, v))
+    fn afun2(v: DDValue) -> Option<(DDValue, DDValue)> {
+        let Tuple2(_, v2) = unsafe { Tuple2::<U64>::from_ddvalue_ref(&v) };
+        Some((v2.clone().into_ddvalue(), v.clone()))
     }
-    fn afun3(v: Value) -> Option<(Value, Value)> {
+    fn afun3(v: DDValue) -> Option<(DDValue, DDValue)> {
         Some((v.clone(), v))
     }
-    fn afun4(v: Value) -> Option<(Value, Value)> {
-        let (k, val) = match &v {
-            Value::Tuple2(v1, v2) => (Value::Tuple2(v2.clone(), v1.clone()), v.clone()),
-            _ => return None,
-        };
-        Some((k, val))
+    fn afun4(v: DDValue) -> Option<(DDValue, DDValue)> {
+        let Tuple2(v1, v2) = unsafe { Tuple2::<U64>::from_ddvalue_ref(&v) };
+        Some((Tuple2(v2.clone(), v1.clone()).into_ddvalue(), v.clone()))
     }
 
-    fn sel_both(v: &Value) -> Value {
-        match &v {
-            Value::Tuple2(x, y) => Value::Tuple2(x.clone(), y.clone()),
-            _ => panic!("delta.sel_both: not a Tuple 2"),
-        }
+    fn sel_both(v: &DDValue) -> DDValue {
+        let Tuple2(x, y) = unsafe { Tuple2::<U64>::from_ddvalue_ref(&v) };
+        Tuple2(x.clone(), y.clone()).into_ddvalue()
     }
-    fn sel_reverse(v: &Value) -> Value {
-        match &v {
-            Value::Tuple2(x, y) => Value::Tuple2(y.clone(), x.clone()),
-            _ => panic!("delta.sel_reverese: not a Tuple 2"),
-        }
+    fn sel_reverse(v: &DDValue) -> DDValue {
+        let Tuple2(x, y) = unsafe { Tuple2::<U64>::from_ddvalue_ref(&v) };
+        Tuple2(y.clone(), x.clone()).into_ddvalue()
     }
 
-    fn propose2(pair: (Value, Value)) -> Option<Value> {
+    fn propose2(pair: (DDValue, DDValue)) -> Option<DDValue> {
         Some(pair.0)
     }
 
-    fn propose5(pair: (Value, Value)) -> Option<Value> {
+    fn propose5(pair: (DDValue, DDValue)) -> Option<DDValue> {
         Some(pair.1)
     }
 
-    let output_set: Arc<Mutex<Delta>> = Arc::new(Mutex::new(BTreeMap::default()));
+    let output_set: Arc<Mutex<Delta<Tuple2<U64>>>> = Arc::new(Mutex::new(BTreeMap::default()));
     let output = {
         let output_set = output_set.clone();
         Relation {
@@ -1161,23 +883,23 @@ fn test_delta(nthreads: usize) {
                     /* dOutput/dT1(x,y) = dT1(x,y), T1'(y,x). */
                     DeltaRule {
                         rel: 1,
-                        fmfun: &(filter_map_ident as FilterMapFunc<Value>),
+                        fmfun: &(filter_map_ident as FilterMapFunc),
                         ops: vec![DeltaOp::Join {
-                            keyfunc: &(sel_both as RefMapFunc<Value>),
+                            keyfunc: &(sel_both as RefMapFunc),
                             arrangement: (1, 3),
                             timestamp: OldNew::New,
-                            pfunc: &(propose2 as ProposeFunc<Value>),
+                            pfunc: &(propose2 as ProposeFunc),
                         }],
                     },
                     /* dOutput/dT1(y,x) = dT1(y,x), T1(x,y) */
                     DeltaRule {
                         rel: 1,
-                        fmfun: &(filter_map_ident as FilterMapFunc<Value>),
+                        fmfun: &(filter_map_ident as FilterMapFunc),
                         ops: vec![DeltaOp::Join {
-                            keyfunc: &(sel_reverse as RefMapFunc<Value>),
+                            keyfunc: &(sel_reverse as RefMapFunc),
                             arrangement: (1, 2),
                             timestamp: OldNew::Old,
-                            pfunc: &(propose5 as ProposeFunc<Value>),
+                            pfunc: &(propose5 as ProposeFunc),
                         }],
                     },
                 ],
@@ -1190,17 +912,11 @@ fn test_delta(nthreads: usize) {
         }
     };
 
-    let prog: Program<Value> = Program {
+    let prog: Program = Program {
         nodes: vec![ProgNode::Rel { rel: rel1 }, ProgNode::Rel { rel: output }],
         init_data: vec![
-            (
-                1,
-                Value::Tuple2(Box::new(Value::u64(1)), Box::new(Value::u64(2))),
-            ),
-            (
-                1,
-                Value::Tuple2(Box::new(Value::u64(2)), Box::new(Value::u64(1))),
-            ),
+            (1, Tuple2(Box::new(U64(1)), Box::new(U64(2))).into_ddvalue()),
+            (1, Tuple2(Box::new(U64(2)), Box::new(U64(1))).into_ddvalue()),
         ],
     };
 
@@ -1210,12 +926,11 @@ fn test_delta(nthreads: usize) {
     //let edge_set = FnvHashSet::from_iter(edges.iter().map(|(x,y)| Value::Tuple2(Box::new(Value::u64(*x)),Box::new(Value::u64(*y)))));
 
     let expected_output: Vec<(u64, u64)> = vec![(1, 2), (2, 1)];
-    let expected_output_set = BTreeMap::from_iter(expected_output.iter().map(|(x, y)| {
-        (
-            Value::Tuple2(Box::new(Value::u64(*x)), Box::new(Value::u64(*y))),
-            1,
-        )
-    }));
+    let expected_output_set = BTreeMap::from_iter(
+        expected_output
+            .iter()
+            .map(|(x, y)| (Tuple2(Box::new(U64(*x)), Box::new(U64(*y))), 1)),
+    );
     /* 1. Initial */
     //    running.transaction_start().unwrap();
     //    let mut updates: Vec<Update<Value>> = Vec::new();
@@ -1244,7 +959,7 @@ fn test_delta_multi() {
 /* Delta queries 2
  */
 fn test_triangles(nthreads: usize) {
-    let relset1: Arc<Mutex<Delta>> = Arc::new(Mutex::new(BTreeMap::default()));
+    let relset1: Arc<Mutex<Delta<Tuple2<U64>>>> = Arc::new(Mutex::new(BTreeMap::default()));
     let rel1 = {
         let relset1 = relset1.clone();
         Relation {
@@ -1257,17 +972,17 @@ fn test_triangles(nthreads: usize) {
             arrangements: vec![
                 Arrangement::Map {
                     name: "(_0,_)".to_string(),
-                    afun: &(afun1 as ArrangeFunc<Value>),
+                    afun: &(afun1 as ArrangeFunc),
                     queryable: false,
                 },
                 Arrangement::Map {
                     name: "(_,_0)".to_string(),
-                    afun: &(afun2 as ArrangeFunc<Value>),
+                    afun: &(afun2 as ArrangeFunc),
                     queryable: false,
                 },
                 Arrangement::Map {
                     name: "(_0,_1)".to_string(),
-                    afun: &(afun3 as ArrangeFunc<Value>),
+                    afun: &(afun3 as ArrangeFunc),
                     queryable: false,
                 },
             ],
@@ -1276,81 +991,59 @@ fn test_triangles(nthreads: usize) {
             })))),
         }
     };
-    fn afun1(v: Value) -> Option<(Value, Value)> {
-        let (v1, v) = match &v {
-            Value::Tuple2(v1, _) => ((**v1).clone(), v.clone()),
-            _ => return None,
-        };
-        Some((v1, v))
+    fn afun1(v: DDValue) -> Option<(DDValue, DDValue)> {
+        let Tuple2(v1, _) = unsafe { Tuple2::<U64>::from_ddvalue_ref(&v) };
+        Some((v1.clone().into_ddvalue(), v.clone()))
     }
-    fn afun2(v: Value) -> Option<(Value, Value)> {
-        let (v2, v) = match &v {
-            Value::Tuple2(_, v2) => ((**v2).clone(), v.clone()),
-            _ => return None,
-        };
-        Some((v2, v))
+    fn afun2(v: DDValue) -> Option<(DDValue, DDValue)> {
+        let Tuple2(_, v2) = unsafe { Tuple2::<U64>::from_ddvalue_ref(&v) };
+        Some((v2.clone().into_ddvalue(), v.clone()))
     }
-    fn afun3(v: Value) -> Option<(Value, Value)> {
+
+    fn afun3(v: DDValue) -> Option<(DDValue, DDValue)> {
         Some((v.clone(), v))
     }
 
-    fn sel1(v: &Value) -> Value {
-        match &v {
-            Value::Tuple2(v1, _) => v1.as_ref().clone(),
-            _ => panic!("triangles.sel1: not a Tuple 2"),
-        }
+    fn sel1(v: &DDValue) -> DDValue {
+        let Tuple2(v1, _) = unsafe { Tuple2::<U64>::from_ddvalue_ref(&v) };
+        v1.clone().into_ddvalue()
     }
-    fn sel2(v: &Value) -> Value {
-        match &v {
-            Value::Tuple2(_, v2) => v2.as_ref().clone(),
-            _ => panic!("triangles.sel2: not a Tuple 2"),
-        }
+    fn sel2(v: &DDValue) -> DDValue {
+        let Tuple2(_, v2) = unsafe { Tuple2::<U64>::from_ddvalue_ref(&v) };
+        v2.clone().into_ddvalue()
     }
-    fn sel_xz(v: &Value) -> Value {
-        match &v {
-            Value::Tuple3(x, _, z) => Value::Tuple2(x.clone(), z.clone()),
-            _ => panic!("triangles.sel_xz: not a Tuple 3"),
-        }
+    fn sel_xz(v: &DDValue) -> DDValue {
+        let Tuple3(x, _, z) = unsafe { Tuple3::<U64>::from_ddvalue_ref(&v) };
+        Tuple2(x.clone(), z.clone()).into_ddvalue()
     }
-    fn sel_yz(v: &Value) -> Value {
-        match &v {
-            Value::Tuple3(_, y, z) => Value::Tuple2(y.clone(), z.clone()),
-            _ => panic!("triangles.sel_yz: not a Tuple 3"),
-        }
+    fn sel_yz(v: &DDValue) -> DDValue {
+        let Tuple3(_, y, z) = unsafe { Tuple3::<U64>::from_ddvalue_ref(&v) };
+        Tuple2(y.clone(), z.clone()).into_ddvalue()
     }
 
-    fn propose1(pair: (Value, Value)) -> Option<Value> {
-        match pair {
-            (Value::Tuple2(x, y), Value::Tuple2(_, z)) => {
-                Some(Value::Tuple3(x.clone(), y.clone(), z.clone()))
-            }
-            _ => None,
-        }
+    fn propose1(pair: (DDValue, DDValue)) -> Option<DDValue> {
+        let Tuple2(x, y) = unsafe { Tuple2::<U64>::from_ddvalue_ref(&pair.0) };
+        let Tuple2(_, z) = unsafe { Tuple2::<U64>::from_ddvalue_ref(&pair.1) };
+        Some(Tuple3(x.clone(), y.clone(), z.clone()).into_ddvalue())
     }
 
-    fn propose2(pair: (Value, Value)) -> Option<Value> {
+    fn propose2(pair: (DDValue, DDValue)) -> Option<DDValue> {
         Some(pair.0)
     }
 
-    fn propose3(pair: (Value, Value)) -> Option<Value> {
-        match pair {
-            (Value::Tuple2(y, z), Value::Tuple2(x, _)) => {
-                Some(Value::Tuple3(x.clone(), y.clone(), z.clone()))
-            }
-            _ => None,
-        }
+    fn propose3(pair: (DDValue, DDValue)) -> Option<DDValue> {
+        let Tuple2(y, z) = unsafe { Tuple2::<U64>::from_ddvalue_ref(&pair.0) };
+        let Tuple2(x, _) = unsafe { Tuple2::<U64>::from_ddvalue_ref(&pair.1) };
+        Some(Tuple3(x.clone(), y.clone(), z.clone()).into_ddvalue())
     }
 
-    fn propose4(pair: (Value, Value)) -> Option<Value> {
-        match pair {
-            (Value::Tuple2(x, z), Value::Tuple2(_, y)) => {
-                Some(Value::Tuple3(x.clone(), y.clone(), z.clone()))
-            }
-            _ => None,
-        }
+    fn propose4(pair: (DDValue, DDValue)) -> Option<DDValue> {
+        let Tuple2(x, z) = unsafe { Tuple2::<U64>::from_ddvalue_ref(&pair.0) };
+        let Tuple2(_, y) = unsafe { Tuple2::<U64>::from_ddvalue_ref(&pair.1) };
+        Some(Tuple3(x.clone(), y.clone(), z.clone()).into_ddvalue())
     }
 
-    let triangle_set: Arc<Mutex<Delta>> = Arc::new(Mutex::new(BTreeMap::default()));
+    let triangle_set: Arc<Mutex<Delta<Tuple3<U64>>>> = Arc::new(Mutex::new(BTreeMap::default()));
     let triangle = {
         let triangle_set = triangle_set.clone();
         Relation {
@@ -1365,57 +1058,57 @@ fn test_triangles(nthreads: usize) {
                     /* dTriangle/dT1(x,y) = dT1(x,y), T1(y,z), T1(x,z) */
                     DeltaRule {
                         rel: 1,
-                        fmfun: &(filter_map_ident as FilterMapFunc<Value>),
+                        fmfun: &(filter_map_ident as FilterMapFunc),
                         ops: vec![
                             DeltaOp::Join {
-                                keyfunc: &(sel2 as RefMapFunc<Value>),
+                                keyfunc: &(sel2 as RefMapFunc),
                                 arrangement: (1, 0),
                                 timestamp: OldNew::New,
-                                pfunc: &(propose1 as ProposeFunc<Value>),
+                                pfunc: &(propose1 as ProposeFunc),
                             },
                             DeltaOp::Join {
-                                keyfunc: &(sel_xz as RefMapFunc<Value>),
+                                keyfunc: &(sel_xz as RefMapFunc),
                                 arrangement: (1, 2),
                                 timestamp: OldNew::New,
-                                pfunc: &(propose2 as ProposeFunc<Value>),
+                                pfunc: &(propose2 as ProposeFunc),
                             },
                         ],
                     },
                     /* dTriangle/dT1(y,z) = dT1(y,z), T1(x,y), T1(x,z) */
                     DeltaRule {
                         rel: 1,
-                        fmfun: &(filter_map_ident as FilterMapFunc<Value>),
+                        fmfun: &(filter_map_ident as FilterMapFunc),
                         ops: vec![
                             DeltaOp::Join {
-                                keyfunc: &(sel1 as RefMapFunc<Value>),
+                                keyfunc: &(sel1 as RefMapFunc),
                                 arrangement: (1, 1),
                                 timestamp: OldNew::Old,
-                                pfunc: &(propose3 as ProposeFunc<Value>),
+                                pfunc: &(propose3 as ProposeFunc),
                             },
                             DeltaOp::Join {
-                                keyfunc: &(sel_xz as RefMapFunc<Value>),
+                                keyfunc: &(sel_xz as RefMapFunc),
                                 arrangement: (1, 2),
                                 timestamp: OldNew::New,
-                                pfunc: &(propose2 as ProposeFunc<Value>),
+                                pfunc: &(propose2 as ProposeFunc),
                             },
                         ],
                     },
                     /* dTriangle/dT1(x,z) = dT1(x,z), T1(x,y), T1(y,z) */
                     DeltaRule {
                         rel: 1,
-                        fmfun: &(filter_map_ident as FilterMapFunc<Value>),
+                        fmfun: &(filter_map_ident as FilterMapFunc),
                         ops: vec![
                             DeltaOp::Join {
-                                keyfunc: &(sel1 as RefMapFunc<Value>),
+                                keyfunc: &(sel1 as RefMapFunc),
                                 arrangement: (1, 0),
                                 timestamp: OldNew::Old,
-                                pfunc: &(propose4 as ProposeFunc<Value>),
+                                pfunc: &(propose4 as ProposeFunc),
                             },
                             DeltaOp::Join {
-                                keyfunc: &(sel_yz as RefMapFunc<Value>),
+                                keyfunc: &(sel_yz as RefMapFunc),
                                 arrangement: (1, 2),
                                 timestamp: OldNew::Old,
-                                pfunc: &(propose2 as ProposeFunc<Value>),
+                                pfunc: &(propose2 as ProposeFunc),
                             },
                         ],
                     },
@@ -1429,7 +1122,7 @@ fn test_triangles(nthreads: usize) {
         }
     };
 
-    let prog: Program<Value> = Program {
+    let prog: Program = Program {
         nodes: vec![ProgNode::Rel { rel: rel1 }, ProgNode::Rel { rel: triangle }],
         init_data: vec![],
     };
@@ -1441,23 +1134,19 @@ fn test_triangles(nthreads: usize) {
     let edge_set = FnvHashSet::from_iter(
         edges
             .iter()
-            .map(|(x, y)| Value::Tuple2(Box::new(Value::u64(*x)), Box::new(Value::u64(*y)))),
+            .map(|(x, y)| Tuple2(Box::new(U64(*x)), Box::new(U64(*y)))),
     );
 
     let expected_triangles: Vec<(u64, u64, u64)> = vec![(1, 2, 3), (3, 4, 1)];
     let expected_triangle_set = BTreeMap::from_iter(expected_triangles.iter().map(|(x, y, z)| {
         (
-            Value::Tuple3(
-                Box::new(Value::u64(*x)),
-                Box::new(Value::u64(*y)),
-                Box::new(Value::u64(*z)),
-            ),
+            Tuple3(Box::new(U64(*x)), Box::new(U64(*y)), Box::new(U64(*z))),
             1,
         )
     }));
     running.transaction_start().unwrap();
     for v in &edge_set {
-        running.insert(1, v.clone()).unwrap();
+        running.insert(1, v.clone().into_ddvalue()).unwrap();
     }
     running.transaction_commit().unwrap();
 
@@ -1468,25 +1157,21 @@ fn test_triangles(nthreads: usize) {
     let delete_edge_set = FnvHashSet::from_iter(
         delete_edges
             .iter()
-            .map(|(x, y)| Value::Tuple2(Box::new(Value::u64(*x)), Box::new(Value::u64(*y)))),
+            .map(|(x, y)| Tuple2(Box::new(U64(*x)), Box::new(U64(*y)))),
     );
 
     let expected_triangles2: Vec<(u64, u64, u64)> = vec![(3, 4, 1)];
     let expected_triangle_set2 =
         BTreeMap::from_iter(expected_triangles2.iter().map(|(x, y, z)| {
             (
-                Value::Tuple3(
-                    Box::new(Value::u64(*x)),
-                    Box::new(Value::u64(*y)),
-                    Box::new(Value::u64(*z)),
-                ),
+                Tuple3(Box::new(U64(*x)), Box::new(U64(*y)), Box::new(U64(*z))),
                 1,
             )
         }));
 
     running.transaction_start().unwrap();
     for x in &delete_edge_set {
-        running.delete_value(1, x.clone()).unwrap();
+        running.delete_value(1, x.clone().into_ddvalue()).unwrap();
     }
     running.transaction_commit().unwrap();
     assert_eq!(*triangle_set.lock().unwrap(), expected_triangle_set2);
@@ -1496,25 +1181,21 @@ fn test_triangles(nthreads: usize) {
     let insert_edge_set = FnvHashSet::from_iter(
         insert_edges
             .iter()
-            .map(|(x, y)| Value::Tuple2(Box::new(Value::u64(*x)), Box::new(Value::u64(*y)))),
+            .map(|(x, y)| Tuple2(Box::new(U64(*x)), Box::new(U64(*y)))),
     );
 
     let expected_triangles3: Vec<(u64, u64, u64)> = vec![(3, 4, 1), (1, 5, 2)];
     let expected_triangle_set3 =
         BTreeMap::from_iter(expected_triangles3.iter().map(|(x, y, z)| {
             (
-                Value::Tuple3(
-                    Box::new(Value::u64(*x)),
-                    Box::new(Value::u64(*y)),
-                    Box::new(Value::u64(*z)),
-                ),
+                Tuple3(Box::new(U64(*x)), Box::new(U64(*y)), Box::new(U64(*z))),
                 1,
             )
         }));
 
     running.transaction_start().unwrap();
     for x in &insert_edge_set {
-        running.insert(1, x.clone()).unwrap();
+        running.insert(1, x.clone().into_ddvalue()).unwrap();
     }
     running.transaction_commit().unwrap();
     assert_eq!(*triangle_set.lock().unwrap(), expected_triangle_set3);
@@ -1524,34 +1205,30 @@ fn test_triangles(nthreads: usize) {
     let insert_edge_set = FnvHashSet::from_iter(
         insert_edges
             .iter()
-            .map(|(x, y)| Value::Tuple2(Box::new(Value::u64(*x)), Box::new(Value::u64(*y)))),
+            .map(|(x, y)| Tuple2(Box::new(U64(*x)), Box::new(U64(*y)))),
     );
     let delete_edges: Vec<(u64, u64)> = vec![(5, 2)];
     let delete_edge_set = FnvHashSet::from_iter(
         delete_edges
             .iter()
-            .map(|(x, y)| Value::Tuple2(Box::new(Value::u64(*x)), Box::new(Value::u64(*y)))),
+            .map(|(x, y)| Tuple2(Box::new(U64(*x)), Box::new(U64(*y)))),
     );
 
     let expected_triangles4: Vec<(u64, u64, u64)> = vec![(3, 4, 1), (2, 6, 3)];
     let expected_triangle_set4 =
         BTreeMap::from_iter(expected_triangles4.iter().map(|(x, y, z)| {
             (
-                Value::Tuple3(
-                    Box::new(Value::u64(*x)),
-                    Box::new(Value::u64(*y)),
-                    Box::new(Value::u64(*z)),
-                ),
+                Tuple3(Box::new(U64(*x)), Box::new(U64(*y)), Box::new(U64(*z))),
                 1,
             )
         }));
 
     running.transaction_start().unwrap();
     for x in &insert_edge_set {
-        running.insert(1, x.clone()).unwrap();
+        running.insert(1, x.clone().into_ddvalue()).unwrap();
     }
     for x in &delete_edge_set {
-        running.delete_value(1, x.clone()).unwrap();
+        running.delete_value(1, x.clone().into_ddvalue()).unwrap();
     }
 
     running.transaction_commit().unwrap();

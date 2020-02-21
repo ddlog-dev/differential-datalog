@@ -1237,7 +1237,7 @@ where
 -}
 compileApplyNode :: (?cfg::CompilerConfig) => DatalogProgram -> Apply -> ProgNode
 compileApplyNode d Apply{..} = ApplyNode $
-    "{fn transformer() -> Box<dyn for<'a> Fn(&mut std::collections::BTreeMap<RelId, collection::Collection<scopes::Child<'a, worker::Worker<communication::Allocator>, TS>,Value,Weight>>)> {" $$
+    "{fn transformer() -> Box<dyn for<'a> Fn(&mut std::collections::BTreeMap<RelId, collection::Collection<scopes::Child<'a, worker::Worker<communication::Allocator>, TS>,DDValue,Weight>>)> {" $$
     "    Box::new(|collections| {"                                                                                                                             $$
     "        let (" <> commaSep outputs <> ") =" <+> rname applyTransformer <> (parens $ commaSep inputs) <> ";"                                               $$
     (nest' $ nest' $ vcat update_collections)                                                                                                                  $$
@@ -1423,7 +1423,7 @@ compileDeltaRule :: (?cfg::CompilerConfig) => DatalogProgram -> Rule -> Compiler
 compileDeltaRule d rl = do
     let atom = rhsAtom $ head $ ruleRHS rl
     -- Open and filter first literal.
-    open <- openAtom d vALUE_VAR rl 0 atom "return None"
+    open <- openAtom d ("&" <> vALUE_VAR) rl 0 atom "return None"
     let filters = mkFilters d rl 0
     let join_indices = tail $ findIndices rhsIsPositiveLiteral $ ruleRHS rl
     let next_join_idx = head join_indices
@@ -1821,7 +1821,7 @@ _mkJoin d is_delta input_filters input_val rl@Rule{..} join_idx = do
     if is_delta
         then do
             let Just (key_vars, _) = rhsInputArrangement d rl join_idx
-            kval <- mkVarsTupleValue d $ map (\(E (EVar _ v),ctx') -> Field nopos v $ exprType d ctx' $ eVar v) key_vars
+            kval <- mkVarsTupleValue d $ map (\(E (EVar _ v),ctx') -> Field nopos [] v $ exprType d ctx' $ eVar v) key_vars
             let kfun = "&{fn __f(" <> vALUE_VAR <> ": &DDValue) -> DDValue" $$
                        (braces' $ kopen $$ kval)  $$
                        "__f}"

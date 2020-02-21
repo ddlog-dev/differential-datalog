@@ -60,8 +60,7 @@ idxKeyType = tTuple . map typ . idxVars
 
 indexValidate :: (MonadError String me) => DatalogProgram -> Index -> me ()
 indexValidate d idx@Index{..} = do
-    uniqNames ("Multiple definitions of argument " ++) idxVars
-    mapM_ (typeValidate d [] . typ) idxVars
+    fieldsValidate d [] idxVars
     atomValidate d (CtxIndex idx) idxAtom
     check (exprIsPatternImpl $ atomVal idxAtom) (pos idxAtom)
           $ "Index expression is not a pattern"
@@ -73,5 +72,4 @@ indexValidate d idx@Index{..} = do
     check (null $ idx_vars \\ atom_vars) (pos idx)
           $ "The following index variables are not constrained by the index pattern: " ++
             (show $ idx_vars \\ atom_vars)
-
 

@@ -260,6 +260,31 @@ decl_ddval_convert! {Tuple2<U64>}
 decl_ddval_convert! {Tuple2<String>}
 
 #[derive(Default, Eq, Ord, Clone, Hash, PartialEq, PartialOrd, Serialize, Deserialize, Debug)]
+pub struct Tuple3<T>(pub Box<T>, pub Box<T>, pub Box<T>);
+impl<T: Abomonation> Abomonation for Tuple3<T> {}
+impl<T: Debug> Display for Tuple3<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        Debug::fmt(self, f)
+    }
+}
+impl<T> IntoRecord for Tuple3<T> {
+    fn into_record(self) -> Record {
+        unimplemented!("Tuple3::IntoRecord");
+    }
+}
+impl<T> Mutator<Tuple3<T>> for Record {
+    fn mutate(&self, _v: &mut Tuple3<T>) -> Result<(), std::string::String> {
+        unimplemented!("Tuple3::Mutator");
+    }
+}
+
+// #[typetag::serde]
+decl_ddval_convert! {Tuple3<U64>}
+
+// #[typetag::serde]
+decl_ddval_convert! {Tuple3<String>}
+
+#[derive(Default, Eq, Ord, Clone, Hash, PartialEq, PartialOrd, Serialize, Deserialize, Debug)]
 pub struct Q {
     pub f1: bool,
     pub f2: String,
