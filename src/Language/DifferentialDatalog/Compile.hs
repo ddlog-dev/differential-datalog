@@ -1427,8 +1427,7 @@ compileDeltaRule d rl = do
     let filters = mkFilters d rl 0
     let join_indices = tail $ findIndices rhsIsPositiveLiteral $ ruleRHS rl
     let next_join_idx = head join_indices
-    ret <- mkVarsTupleValue d
-           $ (rhsVarsAfter d rl (next_join_idx - 1)) `intersect` (rhsVarsAfter d rl next_join_idx)
+    ret <- mkVarsTupleValue d $ (rhsVarsAfter d rl (next_join_idx - 1))
     let fmfun = "&{fn __f(" <> vALUE_VAR <> ": DDValue) -> Option<DDValue>" $$
                 (braces' $ open $$
                            vcat filters $$
