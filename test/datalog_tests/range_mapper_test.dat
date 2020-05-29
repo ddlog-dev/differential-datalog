@@ -1,0 +1,35 @@
+dump range_mapper_test.RangeMappingKV;
+
+# One new mapping per transaction to keep the order deterministic.
+
+start;
+# already has a static mapping
+insert range_mapper_test.Request(100),
+# new mapping
+insert range_mapper_test.Request(1000),
+commit dump_changes;
+
+start;
+# new mapping
+insert range_mapper_test.Request(2000),
+commit dump_changes;
+
+start;
+# new mapping
+insert range_mapper_test.Request(3000),
+commit dump_changes;
+
+start;
+# new mapping
+insert range_mapper_test.Request(4000),
+commit dump_changes;
+
+start;
+# new mapping
+insert range_mapper_test.Request(5000),
+commit dump_changes;
+
+start;
+# we should run out of range here
+insert range_mapper_test.Request(6000),
+commit dump_changes;

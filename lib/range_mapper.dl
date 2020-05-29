@@ -1,0 +1,10 @@
+extern type Mapper<'K, 'V>
+extern type Mapping<'K, 'V>
+
+extern function new_mapper(name: string, start: 'V, end: 'V): Mapper<'K, 'V>
+
+extern function get_mapping(mapper: Mapper<'K, 'V>, k: 'K): Mapping<'K, 'V>
+
+extern function mkey(m: Mapping<'K, 'V>): 'K
+extern function mval(m: Mapping<'K, 'V>): Option<'V>
+extern function mmapper_name(m: Mapping<'K, 'V>): string

@@ -1,0 +1,32 @@
+import range_mapper
+
+relation RangeMapper(mapper: Mapper<u128, u16>)
+
+RangeMapper(new_mapper("test_mapper", 16'd0, 16'd10)).
+
+relation RangeMapping(mapping: Mapping<u128, u16>)
+
+RangeMapping(m1),
+RangeMapping(m2),
+RangeMapping(m3),
+RangeMapping(m4),
+RangeMapping(m5) :-
+    RangeMapper(mapper),
+    var m1 = get_mapping(mapper, 128'd100),
+    var m2 = get_mapping(mapper, 128'd200),
+    var m3 = get_mapping(mapper, 128'd300),
+    var m4 = get_mapping(mapper, 128'd400),
+    var m5 = get_mapping(mapper, 128'd500).
+
+input relation Request(r: u128)
+
+RangeMapping(m) :-
+    RangeMapper(mapper),
+    Request(r),
+    var m = get_mapping(mapper, r).
+
+output relation RangeMappingKV(mapper: string,  k: u128, v: Option<u16>)
+
+RangeMappingKV(mmapper_name(m), mkey(m), mval(m)) :-
+    RangeMapping(m),
+    RangeMapping(m).

@@ -1,0 +1,17 @@
+range_mapper_test.RangeMappingKV{.mapper = "test_mapper", .k = 100, .v = std.Some{.x = 0}}
+range_mapper_test.RangeMappingKV{.mapper = "test_mapper", .k = 200, .v = std.Some{.x = 1}}
+range_mapper_test.RangeMappingKV{.mapper = "test_mapper", .k = 300, .v = std.Some{.x = 2}}
+range_mapper_test.RangeMappingKV{.mapper = "test_mapper", .k = 400, .v = std.Some{.x = 3}}
+range_mapper_test.RangeMappingKV{.mapper = "test_mapper", .k = 500, .v = std.Some{.x = 4}}
+range_mapper_test.RangeMappingKV:
+range_mapper_test.RangeMappingKV{.mapper = "test_mapper", .k = 1000, .v = std.Some{.x = 5}}: +1
+range_mapper_test.RangeMappingKV:
+range_mapper_test.RangeMappingKV{.mapper = "test_mapper", .k = 2000, .v = std.Some{.x = 6}}: +1
+range_mapper_test.RangeMappingKV:
+range_mapper_test.RangeMappingKV{.mapper = "test_mapper", .k = 3000, .v = std.Some{.x = 7}}: +1
+range_mapper_test.RangeMappingKV:
+range_mapper_test.RangeMappingKV{.mapper = "test_mapper", .k = 4000, .v = std.Some{.x = 8}}: +1
+range_mapper_test.RangeMappingKV:
+range_mapper_test.RangeMappingKV{.mapper = "test_mapper", .k = 5000, .v = std.Some{.x = 9}}: +1
+range_mapper_test.RangeMappingKV:
+range_mapper_test.RangeMappingKV{.mapper = "test_mapper", .k = 6000, .v = std.None{}}: +1
