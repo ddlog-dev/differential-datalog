@@ -5,6 +5,7 @@ use differential_datalog::arcval;
 use differential_datalog::int;
 use differential_datalog::record::*;
 
+use fnv::FnvHasher;
 use serde::de::Deserialize;
 use serde::de::Deserializer;
 use serde::ser::Serialize;
@@ -22,7 +23,6 @@ use std::ops;
 use std::slice;
 use std::vec;
 use std::vec::Vec;
-use fnv::FnvHasher;
 
 #[cfg(feature = "flatbuf")]
 use flatbuf::{FBIter, FromFlatBuffer, ToFlatBuffer, ToFlatBufferTable, ToFlatBufferVectorElement};
