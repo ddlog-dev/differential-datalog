@@ -180,26 +180,5 @@ compileProg conf@Config{..} = do
     let dir = (if confOutputDir == "" then takeDirectory confDatalogFile else confOutputDir)
     let crate_types = (if confStaticLib then ["staticlib"] else []) ++
                       (if confDynamicLib then ["cdylib"] else [])
-    let toml_footer = (if confOmitProfile then "" else
-                            "[profile.release]\n"         ++
-                            "opt-level = 2\n"             ++
-                            "debug = false\n"             ++
-                            "rpath = false\n"             ++
-                            -- false: Performs "thin local LTO" which performs "thin" LTO on the local crate
-                            -- only across its codegen units. No LTO is performed if codegen units is 1 or
-                            -- opt-level is 0.
-                            "lto = false\n"               ++
-                            "debug-assertions = false\n") ++
-                      (if confOmitWorkspace then "" else
-                            (if confOmitProfile then "" else "\n") ++
-                            "[workspace]\n"                   ++
-                            "members = [\n"                   ++
-                            "    \"cmd_parser\",\n"           ++
-                            "    \"differential_datalog\",\n" ++
-                            "    \"distributed_datalog\",\n"  ++
-                            "    \"ovsdb\",\n"                ++
-                            "    \"types\",\n"                ++
-                            "    \"value\",\n"                ++
-                            "]\n")
     let ?cfg = conf
-    compile prog specname rs_code toml_code dir crate_types toml_footer
+    compile prog specname rs_code toml_code dir crate_types

@@ -476,10 +476,8 @@ mkConstructorName tname t c =
 --
 -- 'crate_types' - list of Cargo library crate types, e.g., [\"staticlib\"],
 --                  [\"cdylib\"], [\"staticlib\", \"cdylib\"]
---
--- 'toml_footer' - the [profile] and [workspace] sections of the main Cargo.toml
-compile :: (?cfg::Config) => DatalogProgram -> String -> Doc -> Doc -> FilePath -> [String] -> String -> IO ()
-compile d_unoptimized specname rs_code toml_code dir crate_types toml_footer = do
+compile :: (?cfg::Config) => DatalogProgram -> String -> Doc -> Doc -> FilePath -> [String] -> IO ()
+compile d_unoptimized specname rs_code toml_code dir crate_types = do
     -- Create dir if it does not exist.
     createDirectoryIfMissing True (dir </> rustProjectDir specname)
     -- dump dependency graph to file
@@ -507,6 +505,35 @@ compile d_unoptimized specname rs_code toml_code dir crate_types toml_footer = d
     updateFile (dir </> rustProjectDir specname </> "types/Cargo.toml") (render $ typesCargo specname toml_code)
     updateFile (dir </> rustProjectDir specname </> "types/lib.rs")     (render types)
     updateFile (dir </> rustProjectDir specname </> "value/lib.rs")     (render value)
+    let toml_footer =
+            ( if (confOmitProfile ?cfg)
+                then ""
+                else
+                "[profile.release]\n"
+                    ++ "opt-level = 2\n"
+                    ++ "debug = false\n"
+                    ++ "rpath = false\n"
+                    ++
+                    -- false: Performs "thin local LTO" which performs "thin" LTO on the local crate
+                    -- only across its codegen units. No LTO is performed if codegen units is 1 or
+                    -- opt-level is 0.
+                    "lto = false\n"
+                    ++ "debug-assertions = false\n"
+            )
+            ++ ( if (confOmitWorkspace ?cfg)
+                    then ""
+                    else
+                    (if (confOmitProfile ?cfg) then "" else "\n")
+                        ++ "[workspace]\n"
+                        ++ "members = [\n"
+                        ++ "    \"cmd_parser\",\n"
+                        ++ "    \"differential_datalog\",\n"
+                        ++ "    \"distributed_datalog\",\n"
+                        ++ "    \"ovsdb\",\n"
+                        ++ "    \"types\",\n"
+                        ++ "    \"value\",\n"
+                        ++ "]\n"
+                )
     updateFile (dir </> rustProjectDir specname </> "Cargo.toml")       (render $ mainCargo specname crate_types toml_footer)
     updateFile (dir </> rustProjectDir specname </> "src/lib.rs")       (render main)
     return ()
