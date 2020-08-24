@@ -61,6 +61,8 @@ data TOption = Help
              | DumpDebug
              | DumpOpt
              | ReValidate
+             | OmitProfile
+             | OmitWorkspace
 
 options :: [OptDescr TOption]
 options = [ Option ['h'] ["help"]             (NoArg Help)                      "Display help message."
@@ -82,6 +84,8 @@ options = [ Option ['h'] ["help"]             (NoArg Help)                      
           , Option []    ["pp-debug"]         (NoArg DumpDebug)                 "Dump the source after compilation pass 3 (injecting debugging hooks) to FILE.debug.ast.  If the '-g' option is not specified, then pass 3 is a no-op and will produce identical output to pass 2."
           , Option []    ["pp-optimized"]     (NoArg DumpOpt)                   "Dump the source after compilation pass 4 (optimization) to FILE.opt.ast."
           , Option []    ["re-validate"]      (NoArg ReValidate)                "[developers only] Re-validate the program after type inference and optimization passes."
+          , Option []    ["omit-profile"]     (NoArg OmitProfile)               "Skips adding a Cargo profile (silences warnings for some rust builds, included by default)"
+          , Option []    ["omit-workspace"]   (NoArg OmitWorkspace)             "Skips adding a Cargo workspace (silences errors for some rust builds, included by default)"
           ]
 
 addOption :: Config -> TOption -> IO Config
@@ -108,6 +112,8 @@ addOption config DumpValid        = return config { confDumpValid = True }
 addOption config DumpDebug        = return config { confDumpDebug = True }
 addOption config DumpOpt          = return config { confDumpOpt = True }
 addOption config ReValidate       = return config { confReValidate = True }
+addOption config OmitProfile      = return config { confOmitProfile = True }
+addOption config OmitWorkspace    = return config { confOmitWorkspace = True }
 
 validateConfig :: Config -> IO ()
 validateConfig Config{..} = do
@@ -174,5 +180,26 @@ compileProg conf@Config{..} = do
     let dir = (if confOutputDir == "" then takeDirectory confDatalogFile else confOutputDir)
     let crate_types = (if confStaticLib then ["staticlib"] else []) ++
                       (if confDynamicLib then ["cdylib"] else [])
+    let toml_footer = (if confOmitProfile then "" else
+                            "[profile.release]\n"         ++
+                            "opt-level = 2\n"             ++
+                            "debug = false\n"             ++
+                            "rpath = false\n"             ++
+                            -- false: Performs "thin local LTO" which performs "thin" LTO on the local crate
+                            -- only across its codegen units. No LTO is performed if codegen units is 1 or
+                            -- opt-level is 0.
+                            "lto = false\n"               ++
+                            "debug-assertions = false\n") ++
+                      (if confOmitWorkspace then "" else
+                            (if confOmitProfile then "" else "\n") ++
+                            "[workspace]\n"                   ++
+                            "members = [\n"                   ++
+                            "    \"cmd_parser\",\n"           ++
+                            "    \"differential_datalog\",\n" ++
+                            "    \"distributed_datalog\",\n"  ++
+                            "    \"ovsdb\",\n"                ++
+                            "    \"types\",\n"                ++
+                            "    \"value\",\n"                ++
+                            "]\n")
     let ?cfg = conf
-    compile prog specname rs_code toml_code dir crate_types
+    compile prog specname rs_code toml_code dir crate_types toml_footer

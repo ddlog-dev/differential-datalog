@@ -130,10 +130,11 @@ mainHeader :: String -> Doc
 mainHeader specname = header (BS.unpack $ $(embedFile "rust/template/src/lib.rs")) specname
 
 -- Top-level 'Cargo.toml'.
-mainCargo :: String -> [String] -> Doc
-mainCargo specname crate_types =
+mainCargo :: String -> [String] -> String -> Doc
+mainCargo specname crate_types toml_footer =
     (pp $ replace "datalog_example" specname $ BS.unpack $ $(embedFile "rust/template/Cargo.toml")) $$
-    "crate-type = [" <> (hsep $ punctuate "," $ map (\t -> "\"" <> pp t <> "\"") $ "rlib" : crate_types) <> "]"
+    "crate-type = [" <> (hsep $ punctuate "," $ map (\t -> "\"" <> pp t <> "\"") $ "rlib" : crate_types) <> "]\n" $$
+    text toml_footer
 
 -- 'types/Cargo.toml' - imports Rust dependencies.
 typesCargo :: String -> Doc -> Doc
@@ -475,8 +476,10 @@ mkConstructorName tname t c =
 --
 -- 'crate_types' - list of Cargo library crate types, e.g., [\"staticlib\"],
 --                  [\"cdylib\"], [\"staticlib\", \"cdylib\"]
-compile :: (?cfg::Config) => DatalogProgram -> String -> Doc -> Doc -> FilePath -> [String] -> IO ()
-compile d_unoptimized specname rs_code toml_code dir crate_types = do
+--
+-- 'toml_footer' - the [profile] and [workspace] sections of the main Cargo.toml
+compile :: (?cfg::Config) => DatalogProgram -> String -> Doc -> Doc -> FilePath -> [String] -> String -> IO ()
+compile d_unoptimized specname rs_code toml_code dir crate_types toml_footer = do
     -- Create dir if it does not exist.
     createDirectoryIfMissing True (dir </> rustProjectDir specname)
     -- dump dependency graph to file
@@ -504,7 +507,7 @@ compile d_unoptimized specname rs_code toml_code dir crate_types = do
     updateFile (dir </> rustProjectDir specname </> "types/Cargo.toml") (render $ typesCargo specname toml_code)
     updateFile (dir </> rustProjectDir specname </> "types/lib.rs")     (render types)
     updateFile (dir </> rustProjectDir specname </> "value/lib.rs")     (render value)
-    updateFile (dir </> rustProjectDir specname </> "Cargo.toml")       (render $ mainCargo specname crate_types)
+    updateFile (dir </> rustProjectDir specname </> "Cargo.toml")       (render $ mainCargo specname crate_types toml_footer)
     updateFile (dir </> rustProjectDir specname </> "src/lib.rs")       (render main)
     return ()
 
@@ -808,9 +811,14 @@ mkFromRecord d t@TypeDef{..} | tdefGetCustomFromRecord d t = empty
     pos_constructors = vcat $ map mkposcons $ typeCons $ fromJust tdefType
     mkposcons :: Constructor -> Doc
     mkposcons c@Constructor{..} =
-        "\"" <> pp (name c) <> "\"" <+> "if _args.len() ==" <+> (pp $ length consArgs) <+> "=> {" $$
-        "    Ok(" <> cname <> "{" <> (hsep $ punctuate comma fields) <> "})"     $$
-        "},"
+        "\"" <> pp (name c) <> "\""
+        <+> ( if (length consArgs) == 0
+                then "if _args.is_empty()"
+                else "if _args.len() ==" <+> (pp $ length consArgs)
+            )
+        <+> "=> {"
+        $$  "    Ok(" <> cname <> "{" <> (hsep $ punctuate comma fields) <> "})"
+        $$  "},"
         where
         cname = mkConstructorName tdefName (fromJust tdefType) (name c)
         fields = mapIdx (\f i -> pp (name f) <> ": <" <> (mkType f) <> ">::from_record(&_args[" <> pp i <> "])?") consArgs
