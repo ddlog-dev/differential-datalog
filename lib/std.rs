@@ -1,12 +1,17 @@
 /// Rust implementation of DDlog standard library functions and types.
-use differential_datalog::arcval;
-use differential_datalog::int;
-use differential_datalog::record::FromRecord;
-use differential_datalog::record::Record;
+use ::differential_datalog::arcval;
+use ::differential_datalog::int;
+use ::differential_datalog::ddval::DDValue;
+use ::differential_datalog::program::Weight;
+use ::differential_datalog::record::arg_extract;
+use ::differential_datalog::record::FromRecord;
+use ::differential_datalog::record::IntoRecord;
+use ::differential_datalog::record::Mutator;
+use ::differential_datalog::record::Record;
 
-use fnv::FnvHasher;
-use serde::de::Deserializer;
-use serde::ser::Serializer;
+use ::fnv::FnvHasher;
+use ::serde::de::Deserializer;
+use ::serde::ser::Serializer;
 
 use std::borrow;
 use std::cmp;
@@ -41,7 +46,7 @@ pub fn default<T: Default>() -> T {
 // Result
 
 /* Convert Rust result type to DDlog's std::Result. */
-pub fn res2std<T, E: Display>(res: Result<T, E>) -> Result<T, String> {
+pub fn res2std<T, E: Display>(res: ::std::result::Result<T, E>) -> Result<T, String> {
     match res {
         Ok(res) => Result::Ok { res },
         Err(e) => Result::Err {
@@ -153,28 +158,28 @@ pub fn bigint_pow32(base: &int::Int, exp: &u32) -> int::Int {
 }
 
 // Option
-pub fn option2std<T>(x: Option<T>) -> Option<T> {
+pub fn option2std<T>(x: ::std::option::Option<T>) -> Option<T> {
     match x {
-        None => Option::None,
-        Some(v) => Option::Some { x: v },
+        std::option::None => Option::None,
+        std::option::Some(v) => Option::Some { x: v },
     }
 }
 
-pub fn std2option<T>(x: Option<T>) -> Option<T> {
+pub fn std2option<T>(x: Option<T>) -> ::std::option::Option<T> {
     match x {
-        Option::None => None,
-        Option::Some { x } => Some(x),
+        Option::None => ::std::option::None,
+        Option::Some { x } => ::std::option::Some(x),
     }
 }
 
-impl<T> From<Option<T>> for Option<T> {
+impl<T> From<::std::option::Option<T>> for Option<T> {
     fn from(x: Option<T>) -> Self {
         option2std(x)
     }
 }
 
 // this requires Rust 1.41+
-impl<T> From<Option<T>> for Option<T> {
+impl<T> From<Option<T>> for ::std::option::Option<T> {
     fn from(x: Option<T>) -> Self {
         std2option(x)
     }
@@ -337,7 +342,7 @@ impl<T: Clone> From<Vec<T>> for Vec<T> {
     }
 }
 
-impl<T> Deref for Vec<T> {
+impl<T> ops::Deref for Vec<T> {
     type Target = [T];
 
     fn deref(&self) -> &[T] {

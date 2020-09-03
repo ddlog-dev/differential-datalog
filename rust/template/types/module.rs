@@ -17,6 +17,8 @@
 
 use ::serde::Deserialize;
 use ::serde::Serialize;
+use crate::string_append_str;
+use crate::string_append;
 
 /*use ::differential_datalog::ddval::*;
 use ::differential_datalog::decl_enum_into_record;

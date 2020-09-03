@@ -721,7 +721,7 @@ mkTypedef d tdef@TypeDef{..} =
                else "<" <> (hsep $ punctuate comma $ map pp tdefArgs) <> ">"
     targs_traits = if null tdefArgs
                       then empty
-                      else "<" <> (hsep $ punctuate comma $ map ((<> ": Val") . pp) tdefArgs) <> ">"
+                      else "<" <> (hsep $ punctuate comma $ map ((<> ": crate::Val") . pp) tdefArgs) <> ">"
     targs_disp = if null tdefArgs
                     then empty
                     else "<" <> (hsep $ punctuate comma $ map ((<> ": std::fmt::Debug") . pp) tdefArgs) <> ">"
@@ -1331,7 +1331,7 @@ mkFunc d f@Function{..} | isJust funcDef =
     mkArg a = pp (name a) <> ":" <+> "&" <> (if argMut a then "mut" else empty) <+> mkType a
     tvars = case funcTypeVars f of
                  []  -> empty
-                 tvs -> "<" <> (hcat $ punctuate comma $ map ((<> ": Val") . pp) tvs) <> ">"
+                 tvs -> "<" <> (hcat $ punctuate comma $ map ((<> ": crate::Val") . pp) tvs) <> ">"
 
 -- Generate Value type as an enum with one entry per type in types
 mkValType :: (?cfg::Config) => DatalogProgram -> S.Set Type -> Doc

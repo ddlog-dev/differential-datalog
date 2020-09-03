@@ -62,7 +62,7 @@ pub trait Val:
     + PartialEq
     + PartialOrd
     + Serialize
-    + ::serde::DeserializeOwned
+    + ::serde::de::DeserializeOwned
     + 'static
 {
 }
@@ -76,7 +76,7 @@ impl<T> Val for T where
         + PartialEq
         + PartialOrd
         + Serialize
-        + ::serde::DeserializeOwned
+        + ::serde::de::DeserializeOwned
         + 'static
 {
 }

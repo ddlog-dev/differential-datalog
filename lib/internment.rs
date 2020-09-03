@@ -1,6 +1,13 @@
 use differential_datalog::record;
+use differential_datalog::record::FromRecord;
+use differential_datalog::record::IntoRecord;
+use differential_datalog::record::Mutator;
+use differential_datalog::record::Record;
 use std::cmp;
 use std::fmt;
+use std::hash::Hash;
+use std::ops::Deref;
+
 
 #[cfg(feature = "flatbuf")]
 use flatbuf::{FromFlatBuffer, ToFlatBuffer, ToFlatBufferTable, ToFlatBufferVectorElement};
