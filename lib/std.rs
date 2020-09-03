@@ -1,8 +1,8 @@
 /// Rust implementation of DDlog standard library functions and types.
 use differential_datalog::arcval;
 use differential_datalog::int;
-use differential_datalog::record::Record;
 use differential_datalog::record::FromRecord;
+use differential_datalog::record::Record;
 
 use fnv::FnvHasher;
 use serde::de::Deserializer;
@@ -10,19 +10,19 @@ use serde::ser::Serializer;
 
 use std::borrow;
 use std::cmp;
+use std::collections::btree_map;
+use std::collections::btree_set;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
+use std::fmt::Display;
+use std::hash::Hash;
+use std::hash::Hasher;
+use std::iter::FromIterator;
 use std::ops;
 use std::option;
 use std::result;
 use std::slice;
 use std::vec;
-use std::collections::btree_map;
-use std::collections::btree_set;
-use std::collections::{BTreeMap, BTreeSet};
-use std::fmt::Display;
-use std::hash::Hash;
-use std::hash::Hasher;
-use std::iter::FromIterator;
 
 #[cfg(feature = "flatbuf")]
 use flatbuf::{FBIter, FromFlatBuffer, ToFlatBuffer, ToFlatBufferTable, ToFlatBufferVectorElement};
@@ -180,9 +180,7 @@ impl<T> From<Option<T>> for Option<T> {
     }
 }
 
-impl<A: FromRecord + serde::de::DeserializeOwned + Default> FromRecord
-    for Option<A>
-{
+impl<A: FromRecord + serde::de::DeserializeOwned + Default> FromRecord for Option<A> {
     fn from_record(val: &Record) -> result::Result<Self, String> {
         match val {
             Record::PosStruct(constr, args) => match constr.as_ref() {
@@ -974,11 +972,7 @@ pub fn map_remove<K: Ord + Clone, V: Clone>(m: &mut Map<K, V>, k: &K) -> Option<
     option2std(m.x.remove(k))
 }
 
-pub fn map_insert_imm<K: Ord + Clone, V: Clone>(
-    m: &Map<K, V>,
-    k: &K,
-    v: &V,
-) -> Map<K, V> {
+pub fn map_insert_imm<K: Ord + Clone, V: Clone>(m: &Map<K, V>, k: &K, v: &V) -> Map<K, V> {
     let mut m2 = m.clone();
     m2.insert((*k).clone(), (*v).clone());
     m2
@@ -996,10 +990,7 @@ pub fn map_is_empty<K: Ord, V: Clone>(m: &Map<K, V>) -> bool {
     m.x.is_empty()
 }
 
-pub fn map_union<K: Ord + Clone, V: Clone>(
-    m1: &Map<K, V>,
-    m2: &Map<K, V>,
-) -> Map<K, V> {
+pub fn map_union<K: Ord + Clone, V: Clone>(m1: &Map<K, V>, m2: &Map<K, V>) -> Map<K, V> {
     let mut m = m1.clone();
     m.x.append(&mut m2.x.clone());
     m
@@ -1238,9 +1229,7 @@ pub fn group_set_unions<K, V: Ord + Clone>(g: &Group<K, Set<V>>) -> Set<V> {
     res
 }
 
-pub fn group_setref_unions<K, V: Ord + Clone>(
-    g: &Group<K, Ref<Set<V>>>,
-) -> Ref<Set<V>> {
+pub fn group_setref_unions<K, V: Ord + Clone>(g: &Group<K, Ref<Set<V>>>) -> Ref<Set<V>> {
     if g.size() == 1 {
         g.first()
     } else {
@@ -1265,9 +1254,7 @@ pub fn group_to_vec<K, V: Ord + Clone>(g: &Group<K, V>) -> Vec<V> {
     res
 }
 
-pub fn group_to_map<K1, K2: Ord + Clone, V: Clone>(
-    g: &Group<K1, (K2, V)>,
-) -> Map<K2, V> {
+pub fn group_to_map<K1, K2: Ord + Clone, V: Clone>(g: &Group<K1, (K2, V)>) -> Map<K2, V> {
     let mut res = Map::new();
     for (k, v) in g.iter() {
         map_insert(&mut res, &k, &v);

@@ -64,9 +64,7 @@ where
     }
 }
 
-pub fn intern<A: Eq + Hash + Send + Sync + Clone + 'static>(
-    x: &A,
-) -> Intern<A> {
+pub fn intern<A: Eq + Hash + Send + Sync + Clone + 'static>(x: &A) -> Intern<A> {
     Intern::new(x.clone())
 }
 
@@ -216,11 +214,7 @@ pub fn istring_contains(s1: &istring, s2: &String) -> bool {
     s1.as_ref().contains(s2.as_str())
 }
 
-pub fn istring_substr(
-    s: &istring,
-    start: &crate::std::usize,
-    end: &crate::std::usize,
-) -> String {
+pub fn istring_substr(s: &istring, start: &crate::std::usize, end: &crate::std::usize) -> String {
     let len = s.as_ref().len();
     let from = cmp::min(*start as usize, len);
     let to = cmp::max(from, cmp::min(*end as usize, len));

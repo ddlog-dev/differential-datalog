@@ -1,4 +1,4 @@
-use ::ordered_float::OrderedFloat;
+use ordered_float::OrderedFloat;
 use std::result::Result;
 
 pub fn from_string<'de, T: serde::Deserialize<'de>>(
@@ -11,9 +11,7 @@ pub fn to_string<T: serde::Serialize>(x: &T) -> crate::std::Result<String, Strin
     res2std(serde_json::to_string(x))
 }
 
-pub fn from_value<T: DeserializeOwned>(
-    val: &JsonValue,
-) -> crate::std::Result<T, String> {
+pub fn from_value<T: DeserializeOwned>(val: &JsonValue) -> crate::std::Result<T, String> {
     res2std(serde_json::from_value(serde_json::value::Value::from(
         val.clone(),
     )))
@@ -82,8 +80,7 @@ impl From<serde_json::value::Value> for JsonValue {
                 s: internment_intern(&s),
             },
             serde_json::value::Value::Array(a) => {
-                let v: Vec<JsonValue> =
-                    a.into_iter().map(|v| JsonValue::from(v)).collect();
+                let v: Vec<JsonValue> = a.into_iter().map(|v| JsonValue::from(v)).collect();
                 JsonValue::JsonArray {
                     a: crate::std::Vec::from(v),
                 }

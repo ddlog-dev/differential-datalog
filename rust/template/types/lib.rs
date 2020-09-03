@@ -54,7 +54,16 @@ mod flatbuf_generated;
 pub mod flatbuf;
 
 pub trait Val:
-    Default + Eq + Ord + Clone + ::std::hash::Hash + PartialEq + PartialOrd + Serialize + ::serde::DeserializeOwned + 'static
+    Default
+    + Eq
+    + Ord
+    + Clone
+    + ::std::hash::Hash
+    + PartialEq
+    + PartialOrd
+    + Serialize
+    + ::serde::DeserializeOwned
+    + 'static
 {
 }
 
