@@ -60,7 +60,7 @@ typedef json::JsonNum = json::JsonInt{i: std::s128} |
 typedef json::JsonPtr = std::Vec<json::JsonPtrItem>
 typedef json::JsonPtrItem = json::JKeyPtr{key: internment::istring} |
                             json::JIdxPtr{idx: std::usize}
-#[rust = "serde(from = \"__json::ValueWrapper\", into = \"__json::ValueWrapper\")"]
+#[rust = "serde(from = \"ValueWrapper\", into = \"ValueWrapper\")"]
 typedef json::JsonValue = json::JsonNull{} |
                           json::JsonBool{b: bool} |
                           json::JsonNumber{n: json::JsonNum} |

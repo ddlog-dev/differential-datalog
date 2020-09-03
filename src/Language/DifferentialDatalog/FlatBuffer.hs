@@ -1,5 +1,5 @@
 {-
-Copyright (c) 2019 VMware, Inc.
+Copyright (c) 2019-2020 VMware, Inc.
 SPDX-License-Identifier: MIT
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -1531,7 +1531,7 @@ rustTypeFromFlatbuf :: (?d::DatalogProgram) => Type -> Doc
 rustTypeFromFlatbuf t@TUser{..} | typeHasUniqueConstructor t =
     "impl <'a> FromFlatBuffer<fb::" <> tname <> "<'a>> for" <+> rtype <+> "{"                       $$
     "    fn from_flatbuf(v: fb::" <> tname <> "<'a>) -> Response<Self> {"                           $$
-    "        Ok(" <> R.rname typeName <> (braces $ commaSep from_args) <> ")"                       $$
+    "        Ok(" <> R.rnameScoped typeName <> (braces $ commaSep from_args) <> ")"                 $$
     "    }"                                                                                         $$
     "}"                                                                                             $$
     "impl <'b> ToFlatBuffer<'b> for" <+> rtype <+> "{"                                              $$
@@ -1618,7 +1618,7 @@ rustTypeFromFlatbuf t@TUser{..} =
     fbstruct = "fb::" <> fbStructName typeName typeArgs
     tstruct = typ' ?d t
     cons = map (\c -> let fbcname = fbConstructorName typeArgs c
-                          cname = R.rname typeName <> "::" <> R.rname (name c)
+                          cname = R.rnameScoped typeName <> "::" <> (pp $ name c)
                           args = map (\a -> pp (name a) <> ": <" <> R.mkType a <> ">::from_flatbuf(" <> extract_field cname a <> ")?")
                                      $ consArgs c
                       in if null args
@@ -1631,7 +1631,7 @@ rustTypeFromFlatbuf t@TUser{..} =
                                  "},")
                $ typeCons tstruct
     to_cons = map (\c -> let fbcname = fbConstructorName typeArgs c
-                             cname = R.rname typeName <> "::" <> R.rname (name c)
+                             cname = R.rnameScoped typeName <> "::" <> (pp $ name c)
                              args = map (\a -> serialize_field "" a (rustFieldName a)) $ consArgs c
                              arg_names = map (\a -> let n = pp (name a) in
                                                if typeHasUniqueConstructor a

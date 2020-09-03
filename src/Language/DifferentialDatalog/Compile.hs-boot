@@ -11,7 +11,8 @@ import {-# SOURCE #-} Language.DifferentialDatalog.Type
 mkValConstructorName :: DatalogProgram -> Type -> Doc
 mkConstructorName :: String -> Type -> String -> Doc
 mkType :: (WithType a) => a -> Doc
-rname :: String -> Doc
+rnameFlat :: String -> Doc
+rnameScoped :: String -> Doc
 
 mkValue :: (?cfg::Config) => DatalogProgram -> Doc -> Type -> Doc
 tupleStruct :: [Doc] -> Doc
