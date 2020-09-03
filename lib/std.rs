@@ -160,15 +160,15 @@ pub fn bigint_pow32(base: &int::Int, exp: &u32) -> int::Int {
 // Option
 pub fn option2std<T>(x: ::std::option::Option<T>) -> Option<T> {
     match x {
-        std::option::None => Option::None,
-        std::option::Some(v) => Option::Some { x: v },
+        ::std::option::Option::None => Option::None,
+        ::std::option::Option::Some(v) => Option::Some { x: v },
     }
 }
 
 pub fn std2option<T>(x: Option<T>) -> ::std::option::Option<T> {
     match x {
-        Option::None => ::std::option::None,
-        Option::Some { x } => ::std::option::Some(x),
+        Option::None => ::std::option::Option::None,
+        Option::Some { x } => ::std::option::Option::Some(x),
     }
 }
 

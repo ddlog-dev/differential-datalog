@@ -15,10 +15,12 @@
     clippy::match_single_binding
 )]
 
+// Required for #[derive(Serialize, Deserialize)].
 use ::serde::Deserialize;
 use ::serde::Serialize;
-use crate::string_append_str;
-use crate::string_append;
+
+// Import statics from the main library.
+use crate::*;
 
 /*use ::differential_datalog::ddval::*;
 use ::differential_datalog::decl_enum_into_record;

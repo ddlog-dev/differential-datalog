@@ -1,3 +1,5 @@
+use differential_datalog::record::IntoRecord;
+
 use std::fmt;
 use std::fs::OpenOptions;
 use std::io::Write;

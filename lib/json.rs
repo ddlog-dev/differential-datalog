@@ -1,5 +1,9 @@
 use ordered_float::OrderedFloat;
 use std::result::Result;
+use serde::de::DeserializeOwned;
+
+use crate::std::res2std;
+use crate::internment;
 
 pub fn from_string<'de, T: serde::Deserialize<'de>>(
     json: &'de String,
@@ -77,7 +81,7 @@ impl From<serde_json::value::Value> for JsonValue {
                 n: JsonNum::from(n),
             },
             serde_json::value::Value::String(s) => JsonValue::JsonString {
-                s: internment_intern(&s),
+                s: internment::intern(&s),
             },
             serde_json::value::Value::Array(a) => {
                 let v: Vec<JsonValue> = a.into_iter().map(|v| JsonValue::from(v)).collect();
@@ -87,7 +91,7 @@ impl From<serde_json::value::Value> for JsonValue {
             }
             serde_json::value::Value::Object(o) => JsonValue::JsonObject {
                 o: o.into_iter()
-                    .map(|(k, v)| (internment_intern(&k), JsonValue::from(v)))
+                    .map(|(k, v)| (internment::intern(&k), JsonValue::from(v)))
                     .collect(),
             },
         }
@@ -101,7 +105,7 @@ impl From<JsonValue> for serde_json::value::Value {
             JsonValue::JsonBool { b } => serde_json::value::Value::Bool(b),
             JsonValue::JsonNumber { n } => val_from_num(n),
             JsonValue::JsonString { s } => {
-                serde_json::value::Value::String(internment_ival(&s).clone())
+                serde_json::value::Value::String(internment::ival(&s).clone())
             }
             JsonValue::JsonArray { a } => serde_json::value::Value::Array(
                 a.into_iter()
@@ -112,7 +116,7 @@ impl From<JsonValue> for serde_json::value::Value {
                 o.into_iter()
                     .map(|(k, v)| {
                         (
-                            internment_ival(&k).clone(),
+                            internment::ival(&k).clone(),
                             serde_json::value::Value::from(v),
                         )
                     })
