@@ -2,26 +2,26 @@ use ::ordered_float::OrderedFloat;
 use ::std::result::Result;
 use ::serde::de::DeserializeOwned;
 
-use crate::std::res2std;
+use crate::ddlog_std::res2std;
 use crate::internment;
 
 pub fn from_string<'de, T: serde::Deserialize<'de>>(
     json: &'de String,
-) -> crate::std::Result<T, String> {
+) -> crate::ddlog_std::Result<T, String> {
     res2std(serde_json::from_str::<'de>(&*json))
 }
 
-pub fn to_string<T: serde::Serialize>(x: &T) -> crate::std::Result<String, String> {
+pub fn to_string<T: serde::Serialize>(x: &T) -> crate::ddlog_std::Result<String, String> {
     res2std(serde_json::to_string(x))
 }
 
-pub fn from_value<T: DeserializeOwned>(val: &JsonValue) -> crate::std::Result<T, String> {
+pub fn from_value<T: DeserializeOwned>(val: &JsonValue) -> crate::ddlog_std::Result<T, String> {
     res2std(serde_json::from_value(serde_json::value::Value::from(
         val.clone(),
     )))
 }
 
-pub fn to_value<T: serde::Serialize>(x: &T) -> crate::std::Result<JsonValue, String> {
+pub fn to_value<T: serde::Serialize>(x: &T) -> crate::ddlog_std::Result<JsonValue, String> {
     res2std(serde_json::to_value(x.clone()).map(JsonValue::from))
 }
 
@@ -86,7 +86,7 @@ impl From<serde_json::value::Value> for JsonValue {
             serde_json::value::Value::Array(a) => {
                 let v: Vec<JsonValue> = a.into_iter().map(|v| JsonValue::from(v)).collect();
                 JsonValue::JsonArray {
-                    a: crate::std::Vec::from(v),
+                    a: crate::ddlog_std::Vec::from(v),
                 }
             }
             serde_json::value::Value::Object(o) => JsonValue::JsonObject {

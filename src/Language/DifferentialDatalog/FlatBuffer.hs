@@ -95,6 +95,7 @@ import Language.DifferentialDatalog.NS
 import Language.DifferentialDatalog.Relation
 import Language.DifferentialDatalog.Index
 import Language.DifferentialDatalog.Error
+import Language.DifferentialDatalog.Module
 import {-# SOURCE #-} qualified Language.DifferentialDatalog.Compile as R -- "R" for "Rust"
 
 compileFlatBufferBindings :: (?cfg :: Config) => DatalogProgram -> String -> FilePath -> IO ()
@@ -386,7 +387,7 @@ typeTableName x =
          TOpaque{typeArgs = [elemType], ..} | elem typeName sET_TYPES
                        -> "__Table_Vec_" <> mkTypeIdentifier elemType
          TOpaque{typeArgs = [keyType, valType], ..} | typeName == mAP_TYPE
-                       -> typeTableName $ tOpaque "std::Vec" [tTuple [keyType, valType]]
+                       -> typeTableName $ tOpaque (mOD_STD ++ "::Vec") [tTuple [keyType, valType]]
          t             -> error $ "typeTableName: Unexpected type " ++ show t
 
 -- True if type is serialized into a vector inside FlatBuffer.

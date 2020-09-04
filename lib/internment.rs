@@ -198,7 +198,7 @@ where
     }
 }
 
-pub fn istring_join(strings: &crate::std::Vec<istring>, sep: &String) -> String {
+pub fn istring_join(strings: &crate::ddlog_std::Vec<istring>, sep: &String) -> String {
     strings
         .x
         .iter()
@@ -208,8 +208,8 @@ pub fn istring_join(strings: &crate::std::Vec<istring>, sep: &String) -> String 
         .join(sep.as_str())
 }
 
-pub fn istring_split(s: &istring, sep: &String) -> crate::std::Vec<String> {
-    crate::std::Vec {
+pub fn istring_split(s: &istring, sep: &String) -> crate::ddlog_std::Vec<String> {
+    crate::ddlog_std::Vec {
         x: s.as_ref().split(sep).map(|x| x.to_owned()).collect(),
     }
 }
@@ -245,8 +245,8 @@ pub fn istring_len(s: &istring) -> std_usize {
     s.as_ref().len() as std_usize
 }
 
-pub fn istring_to_bytes(s: &istring) -> crate::std::Vec<u8> {
-    crate::std::Vec::from(s.as_ref().as_bytes())
+pub fn istring_to_bytes(s: &istring) -> crate::ddlog_std::Vec<u8> {
+    crate::ddlog_std::Vec::from(s.as_ref().as_bytes())
 }
 
 pub fn istring_to_lowercase(s: &istring) -> String {

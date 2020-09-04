@@ -318,41 +318,41 @@ pub fn nan_d() -> OrderedFloat<f64> {
     OrderedFloat::<f64>(::std::f64::NAN)
 }
 
-pub fn int_from_f(v: &OrderedFloat<f32>) -> crate::std::Option<Int> {
+pub fn int_from_f(v: &OrderedFloat<f32>) -> crate::ddlog_std::Option<Int> {
     match (BigInt::from_f32(**v)) {
-        None => crate::std::Option::None,
-        Some(x) => crate::std::Option::Some {
+        None => crate::ddlog_std::Option::None,
+        Some(x) => crate::ddlog_std::Option::Some {
             x: Int::from_bigint(x),
         },
     }
 }
 
-pub fn int_from_d(v: &OrderedFloat<f64>) -> crate::std::Option<Int> {
+pub fn int_from_d(v: &OrderedFloat<f64>) -> crate::ddlog_std::Option<Int> {
     match (BigInt::from_f64(**v)) {
-        None => crate::std::Option::None,
-        Some(x) => crate::std::Option::Some {
+        None => crate::ddlog_std::Option::None,
+        Some(x) => crate::ddlog_std::Option::Some {
             x: Int::from_bigint(x),
         },
     }
 }
 
-pub fn parse_f(s: &String) -> crate::std::Result<OrderedFloat<f32>, String> {
+pub fn parse_f(s: &String) -> crate::ddlog_std::Result<OrderedFloat<f32>, String> {
     match (s.parse::<f32>()) {
-        Ok(res) => crate::std::Result::Ok {
+        Ok(res) => crate::ddlog_std::Result::Ok {
             res: OrderedFloat::<f32>(res),
         },
-        Err(err) => crate::std::Result::Err {
+        Err(err) => crate::ddlog_std::Result::Err {
             err: format!("{}", err),
         },
     }
 }
 
-pub fn parse_d(s: &String) -> crate::std::Result<OrderedFloat<f64>, String> {
+pub fn parse_d(s: &String) -> crate::ddlog_std::Result<OrderedFloat<f64>, String> {
     match (s.parse::<f64>()) {
-        Ok(res) => crate::std::Result::Ok {
+        Ok(res) => crate::ddlog_std::Result::Ok {
             res: OrderedFloat::<f64>(res),
         },
-        Err(err) => crate::std::Result::Err {
+        Err(err) => crate::ddlog_std::Result::Err {
             err: format!("{}", err),
         },
     }

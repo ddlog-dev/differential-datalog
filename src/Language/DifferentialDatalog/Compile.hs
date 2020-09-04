@@ -357,7 +357,7 @@ rnameFlat = pp . replace "::" "_"
 -- Types and functions are stored in Rust modules that mirror the DDlog
 -- module hierarchy.
 rnameScoped :: String -> Doc
-rnameScoped = ("crate::" <>) . pp
+rnameScoped = {-("crate::" <>) .-} pp
 
 mkRelEnum :: DatalogProgram -> Doc
 mkRelEnum d =
@@ -1780,10 +1780,10 @@ mkFilterMap d prefix rl idx = do
 mkInspect :: (?cfg::Config, ?statics::Statics) => DatalogProgram -> Doc -> Rule -> Int -> Expr -> Bool -> CompilerMonad Doc
 mkInspect d prefix rl idx e input_val = do
     -- Inspected
-    let weight = "let ddlog_weight = &(" <> wEIGHT_VAR <> " as std_DDWeight);"
+    let weight = "let ddlog_weight = &(" <> wEIGHT_VAR <> " as" <+> pp mOD_STD <> "_DDWeight);"
     let timestamp = if ruleIsRecursive d rl
-        then "let ddlog_timestamp = &std_DDNestedTS{epoch:" <+> tIMESTAMP_VAR <> ".0 as std_DDEpoch, iter:" <+> tIMESTAMP_VAR <> ".1.x as std_DDIteration};"
-        else "let ddlog_timestamp = &(" <> tIMESTAMP_VAR <> ".0 as std_DDEpoch);"
+        then "let ddlog_timestamp = &" <> pp mOD_STD <> "_DDNestedTS{epoch:" <+> tIMESTAMP_VAR <> ".0 as" <+> pp mOD_STD <> "_DDEpoch, iter:" <+> tIMESTAMP_VAR <> ".1.x as" <+> pp mOD_STD <> "_DDIteration};"
+        else "let ddlog_timestamp = &(" <> tIMESTAMP_VAR <> ".0 as" <+> pp mOD_STD <> "_DDEpoch);"
     let inspected = (braces $ mkExpr d (CtxRuleRInspect rl idx) e EVal) <> ";"
     let ifun = braces'
                 $ weight $$
@@ -1812,7 +1812,7 @@ mkAggregate d filters input_val rl@Rule{..} idx = do
                else openTuple d vALUE_VAR group_vars
     let project = "{fn __f(" <> vALUE_VAR <> ": &DDValue) -> " <+> mkType d (exprType d ctx rhsAggExpr) $$
                   (braces' $ open $$ mkExpr d ctx rhsAggExpr EVal)                                      $$
-                  "std::rc::Rc::new(__f)}"
+                  "::std::rc::Rc::new(__f)}"
     -- Aggregate function:
     -- - compute aggregate
     -- - return variables still in scope after this term
@@ -1821,7 +1821,7 @@ mkAggregate d filters input_val rl@Rule{..} idx = do
     let tmap = ruleAggregateTypeParams d rl idx
     let agg_func = getFunc d rhsAggFunc [tOpaque gROUP_TYPE [ktype, vtype]]
     -- Pass group-by variables to the aggregate function.
-    let grp = "&std_Group::new(&" <> (mkExpr d gctx rhsGroupBy EVal) <> "," <+> gROUP_VAR <> "," <+> project <> ")"
+    let grp = "&" <> pp mOD_STD <> "_Group::new(&" <> (mkExpr d gctx rhsGroupBy EVal) <> "," <+> gROUP_VAR <> "," <+> project <> ")"
     let tparams = commaSep $ map (\tvar -> mkType d (tmap M.! tvar)) $ funcTypeVars agg_func
     let aggregate = "let" <+> pp rhsVar <+> "=" <+> rnameScoped rhsAggFunc <>
                     "::<" <> tparams <> ">(" <> grp <> ");"

@@ -5,7 +5,7 @@ use ::std::string::ToString;
 
 pub fn debug_event<T1: ToString, A1: Clone + IntoRecord, A2: Clone + IntoRecord>(
     operator_id: &(u32, u32, u32),
-    w: &crate::std::DDWeight,
+    w: &crate::ddlog_std::DDWeight,
     ts: &T1,
     operator_type: &String,
     input1: &A1,
@@ -36,7 +36,7 @@ pub fn debug_event_join<
     A3: Clone + IntoRecord,
 >(
     operator_id: &(u32, u32, u32),
-    w: &crate::std::DDWeight,
+    w: &crate::ddlog_std::DDWeight,
     ts: &T1,
     input1: &A1,
     input2: &A2,
@@ -61,9 +61,9 @@ pub fn debug_event_join<
 }
 
 pub fn debug_split_group<'a, K, I: 'static + Clone, V: 'static>(
-    g: &'a crate::std::Group<'a, K, (I, V)>,
-) -> (crate::std::Vec<I>, crate::std::Group<'a, K, V>) {
-    let mut inputs = crate::std::Vec::with_capacity(crate::std::group_count(g) as usize);
+    g: &'a crate::ddlog_std::Group<'a, K, (I, V)>,
+) -> (crate::ddlog_std::Vec<I>, crate::ddlog_std::Group<'a, K, V>) {
+    let mut inputs = crate::ddlog_std::Vec::with_capacity(crate::ddlog_std::group_count(g) as usize);
     for (i, _) in g.iter() {
         inputs.push(i.clone())
     }
@@ -71,7 +71,7 @@ pub fn debug_split_group<'a, K, I: 'static + Clone, V: 'static>(
     let orig_project = g.project.clone();
     (
         inputs,
-        crate::std::Group::new(
+        crate::ddlog_std::Group::new(
             g.key,
             g.group,
             ::std::rc::Rc::new(move |v| (orig_project)(v).1),

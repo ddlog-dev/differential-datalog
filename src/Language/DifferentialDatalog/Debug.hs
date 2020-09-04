@@ -40,6 +40,7 @@ import Text.PrettyPrint
 import {-# SOURCE #-} qualified Language.DifferentialDatalog.Compile as Compile
 import Language.DifferentialDatalog.Pos
 import Language.DifferentialDatalog.Syntax
+import Language.DifferentialDatalog.Module
 import Language.DifferentialDatalog.Var
 import {-# SOURCE #-} Language.DifferentialDatalog.Type
 import Language.DifferentialDatalog.Util
@@ -214,7 +215,7 @@ debugAggregateFunction d rlidx rhsidx =
     gctx = CtxRuleRGroupBy rule rhsidx
     tkey = exprType'' d gctx rhsGroupBy
     tval = exprType'' d ctx rhsAggExpr
-    tinputs = tOpaque "std::Vec" [tVar "I"]
+    tinputs = tOpaque (mOD_STD ++ "::Vec") [tVar "I"]
     tret = varType d (AggregateVar rule rhsidx)
     fname = debugAggregateFunctionName rlidx rhsidx rhsAggFunc
     funcBody = eSeq (eSet (eTuple [eVarDecl "inputs" tinputs, eVarDecl "original_group" $ tOpaque gROUP_TYPE [tkey, tval]])

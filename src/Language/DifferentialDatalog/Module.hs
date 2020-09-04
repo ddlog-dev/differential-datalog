@@ -29,6 +29,7 @@ Description: DDlog's module system implemented as syntactic sugar over core synt
 {-# LANGUAGE RecordWildCards, FlexibleContexts, TupleSections, LambdaCase, OverloadedStrings #-}
 
 module Language.DifferentialDatalog.Module(
+    mOD_STD,
     DatalogModule(..),
     moduleNameToPath,
     moduleIsChildOf,
@@ -62,6 +63,10 @@ import Language.DifferentialDatalog.DatalogProgram
 import Language.DifferentialDatalog.Error
 --import Language.DifferentialDatalog.Validate
 
+-- DDlog standard library name.
+mOD_STD :: String
+mOD_STD = "ddlog_std"
+
 -- 'child' is an immediate submodule of 'parent'.
 moduleIsChildOf :: ModuleName -> ModuleName -> Bool
 moduleIsChildOf (ModuleName child) (ModuleName parent) =
@@ -92,7 +97,7 @@ data DatalogModule = DatalogModule {
 
 -- Standard library module name.
 stdLibs :: [ModuleName]
-stdLibs = [ModuleName ["std"], ModuleName ["internment"]]
+stdLibs = [ModuleName [mOD_STD], ModuleName ["internment"]]
 
 stdImport :: ModuleName -> Import
 stdImport lib = Import nopos lib (ModuleName [])
