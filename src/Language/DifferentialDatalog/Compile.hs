@@ -1346,7 +1346,7 @@ mkValType d types =
     mkVal :: Type -> Doc
     mkVal t =
         "#[derive(Default, Eq, Ord, Clone, Hash, PartialEq, PartialOrd, Serialize, Deserialize, Debug)]"            $$
-        "pub struct" <+> tname <+> parens ("pub" <+> mkTypeScoped d "super::" t) <> ";"                             $$
+        "pub struct" <+> tname <+> parens ("pub" <+> mkType d t) <> ";"                                             $$
         "impl abomonation::Abomonation for" <+> tname <+> "{}"                                                      $$
         "impl ::std::fmt::Display for" <+> tname <+> "{"                                                            $$
         "    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {"                              $$
@@ -1364,7 +1364,7 @@ mkValType d types =
         "    }"                                                                                                     $$
         "}"                                                                                                         $$
         "//#[typetag::serde]"                                                                                       $$
-        "::differential_datalog::ddval::decl_ddval_convert!{" <> tname <> "}"
+        "::differential_datalog::decl_ddval_convert!{" <> tname <> "}"
         where tname = mkValConstructorName d t
 
 -- Precompute the set of arrangements used by the program.  This is done as a separate
@@ -2769,10 +2769,6 @@ mkFuncNameShort d f | length namesakes == 1 = pp $ nameLocal $ name f
 
 mkType :: (WithType a) => DatalogProgram -> a -> Doc
 mkType d x = mkType' d empty $ typ x
-
--- DDlog user-defined types are declared in `scope`.
-mkTypeScoped :: (WithType a) => DatalogProgram -> Doc -> a -> Doc
-mkTypeScoped d scope x = mkType' d scope $ typ x
 
 mkType' :: DatalogProgram -> Doc -> Type -> Doc
 mkType' _ _       TBool{}                    = "bool"

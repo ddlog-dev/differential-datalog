@@ -259,7 +259,7 @@ macro_rules! decl_ddval_convert {
 
         impl $crate::ddval::DDValConvert for $t {
             unsafe fn from_ddval_ref(v: &$crate::ddval::DDVal) -> &Self {
-                if std::mem::size_of::<Self>() <= std::mem::size_of::<usize>() {
+                if ::std::mem::size_of::<Self>() <= ::std::mem::size_of::<usize>() {
                     &*(&v.v as *const usize as *const Self)
                 } else {
                     &*(v.v as *const Self)
@@ -267,39 +267,39 @@ macro_rules! decl_ddval_convert {
             }
 
             unsafe fn from_ddval_mut_ref(v: &mut $crate::ddval::DDVal) -> &mut Self {
-                if std::mem::size_of::<Self>() <= std::mem::size_of::<usize>() {
+                if ::std::mem::size_of::<Self>() <= ::std::mem::size_of::<usize>() {
                     &mut *(&mut v.v as *mut usize as *mut Self)
                 } else {
-                    let arc = std::sync::Arc::from_raw(v.v as *const Self);
-                    v.v = std::sync::Arc::into_raw(arc) as usize;
+                    let arc = ::std::sync::Arc::from_raw(v.v as *const Self);
+                    v.v = ::std::sync::Arc::into_raw(arc) as usize;
                     &mut *(v.v as *mut Self)
                 }
             }
 
             unsafe fn from_ddval(v: $crate::ddval::DDVal) -> Self {
-                if std::mem::size_of::<Self>() <= std::mem::size_of::<usize>() {
-                    let res: Self = std::mem::transmute::<[u8; std::mem::size_of::<Self>()], Self>(
-                        *(&v.v as *const usize as *const [u8; std::mem::size_of::<Self>()]),
+                if ::std::mem::size_of::<Self>() <= ::std::mem::size_of::<usize>() {
+                    let res: Self = ::std::mem::transmute::<[u8; ::std::mem::size_of::<Self>()], Self>(
+                        *(&v.v as *const usize as *const [u8; ::std::mem::size_of::<Self>()]),
                     );
-                    std::mem::forget(v);
+                    ::std::mem::forget(v);
                     res
                 } else {
-                    let arc = std::sync::Arc::from_raw(v.v as *const Self);
-                    std::sync::Arc::try_unwrap(arc).unwrap_or_else(|a| (*a).clone())
+                    let arc = ::std::sync::Arc::from_raw(v.v as *const Self);
+                    ::std::sync::Arc::try_unwrap(arc).unwrap_or_else(|a| (*a).clone())
                 }
             }
 
             fn into_ddval(self) -> $crate::ddval::DDVal {
-                if std::mem::size_of::<Self>() <= std::mem::size_of::<usize>() {
+                if ::std::mem::size_of::<Self>() <= ::std::mem::size_of::<usize>() {
                     let mut v: usize = 0;
                     unsafe {
-                        *(&mut v as *mut usize as *mut [u8; std::mem::size_of::<Self>()]) =
-                            std::mem::transmute::<Self, [u8; std::mem::size_of::<Self>()]>(self);
+                        *(&mut v as *mut usize as *mut [u8; ::std::mem::size_of::<Self>()]) =
+                            ::std::mem::transmute::<Self, [u8; ::std::mem::size_of::<Self>()]>(self);
                     };
                     $crate::ddval::DDVal { v }
                 } else {
                     $crate::ddval::DDVal {
-                        v: std::sync::Arc::into_raw(std::sync::Arc::new(self)) as usize,
+                        v: ::std::sync::Arc::into_raw(::std::sync::Arc::new(self)) as usize,
                     }
                 }
             }
@@ -308,14 +308,14 @@ macro_rules! decl_ddval_convert {
                 const VTABLE: $crate::ddval::DDValMethods = $crate::ddval::DDValMethods {
                     clone: {
                         fn __f(this: &$crate::ddval::DDVal) -> $crate::ddval::DDVal {
-                            if std::mem::size_of::<$t>() <= std::mem::size_of::<usize>() {
+                            if ::std::mem::size_of::<$t>() <= ::std::mem::size_of::<usize>() {
                                 unsafe { <$t>::from_ddval_ref(this) }.clone().into_ddval()
                             } else {
-                                let arc = unsafe { std::sync::Arc::from_raw(this.v as *const $t) };
+                                let arc = unsafe { ::std::sync::Arc::from_raw(this.v as *const $t) };
                                 let res = $crate::ddval::DDVal {
-                                    v: std::sync::Arc::into_raw(arc.clone()) as usize,
+                                    v: ::std::sync::Arc::into_raw(arc.clone()) as usize,
                                 };
-                                std::sync::Arc::into_raw(arc);
+                                ::std::sync::Arc::into_raw(arc);
                                 res
                             }
                         };
@@ -337,7 +337,7 @@ macro_rules! decl_ddval_convert {
                         fn __f(
                             this: &$crate::ddval::DDVal,
                             other: &$crate::ddval::DDVal,
-                        ) -> Option<std::cmp::Ordering> {
+                        ) -> Option<::std::cmp::Ordering> {
                             unsafe {
                                 <$t>::from_ddval_ref(this).partial_cmp(<$t>::from_ddval_ref(other))
                             }
@@ -348,14 +348,14 @@ macro_rules! decl_ddval_convert {
                         fn __f(
                             this: &$crate::ddval::DDVal,
                             other: &$crate::ddval::DDVal,
-                        ) -> std::cmp::Ordering {
+                        ) -> ::std::cmp::Ordering {
                             unsafe { <$t>::from_ddval_ref(this).cmp(<$t>::from_ddval_ref(other)) }
                         };
                         __f
                     },
                     hash: {
-                        fn __f(this: &$crate::ddval::DDVal, mut state: &mut dyn std::hash::Hasher) {
-                            std::hash::Hash::hash(
+                        fn __f(this: &$crate::ddval::DDVal, mut state: &mut dyn ::std::hash::Hasher) {
+                            ::std::hash::Hash::hash(
                                 unsafe { <$t>::from_ddval_ref(this) },
                                 &mut state,
                             );
@@ -366,7 +366,7 @@ macro_rules! decl_ddval_convert {
                         fn __f(
                             this: &mut $crate::ddval::DDVal,
                             record: &$crate::record::Record,
-                        ) -> Result<(), std::string::String> {
+                        ) -> Result<(), ::std::string::String> {
                             $crate::record::Mutator::mutate(record, unsafe {
                                 <$t>::from_ddval_mut_ref(this)
                             })
@@ -376,34 +376,34 @@ macro_rules! decl_ddval_convert {
                     fmt_debug: {
                         fn __f(
                             this: &$crate::ddval::DDVal,
-                            f: &mut std::fmt::Formatter,
-                        ) -> Result<(), std::fmt::Error> {
-                            std::fmt::Debug::fmt(unsafe { <$t>::from_ddval_ref(this) }, f)
+                            f: &mut ::std::fmt::Formatter,
+                        ) -> Result<(), ::std::fmt::Error> {
+                            ::std::fmt::Debug::fmt(unsafe { <$t>::from_ddval_ref(this) }, f)
                         };
                         __f
                     },
                     fmt_display: {
                         fn __f(
                             this: &$crate::ddval::DDVal,
-                            f: &mut std::fmt::Formatter,
-                        ) -> Result<(), std::fmt::Error> {
-                            std::fmt::Display::fmt(unsafe { <$t>::from_ddval_ref(this) }, f)
+                            f: &mut ::std::fmt::Formatter,
+                        ) -> Result<(), ::std::fmt::Error> {
+                            ::std::fmt::Display::fmt(unsafe { <$t>::from_ddval_ref(this) }, f)
                         };
                         __f
                     },
                     drop: {
                         fn __f(this: &mut $crate::ddval::DDVal) {
-                            if std::mem::size_of::<$t>() <= std::mem::size_of::<usize>() {
+                            if ::std::mem::size_of::<$t>() <= ::std::mem::size_of::<usize>() {
                                 unsafe {
                                     let _v: $t =
-                                        std::mem::transmute::<[u8; std::mem::size_of::<$t>()], $t>(
+                                        ::std::mem::transmute::<[u8; ::std::mem::size_of::<$t>()], $t>(
                                             *(&this.v as *const usize
-                                                as *const [u8; std::mem::size_of::<$t>()]),
+                                                as *const [u8; ::std::mem::size_of::<$t>()]),
                                         );
                                 };
                             // v's destructor will do the rest.
                             } else {
-                                let _arc = unsafe { std::sync::Arc::from_raw(this.v as *const $t) };
+                                let _arc = unsafe { ::std::sync::Arc::from_raw(this.v as *const $t) };
                                 // arc's destructor will do the rest.
                             }
                         };
