@@ -1473,11 +1473,11 @@ impl<T: FromRecord> Mutator<vec::Vec<T>> for Record {
 macro_rules! decl_arr_from_record {
     ( $i:tt ) => {
         impl<T: FromRecord + Default> FromRecord for [T; $i] {
-            fn from_record(val: &Record) -> std::result::Result<Self, String> {
+            fn from_record(val: &Record) -> ::std::result::Result<Self, String> {
                 let vec = Vec::from_record(val)?;
                 let mut arr = <[T; $i]>::default();
                 if vec.len() != $i {
-                    return std::result::Result::Err(format!(
+                    return ::std::result::Result::Err(format!(
                         "cannot convert {:?} to array of length {}",
                         *val, $i
                     ));
@@ -1487,7 +1487,7 @@ macro_rules! decl_arr_from_record {
                     arr[idx] = v;
                     idx += 1;
                 }
-                std::result::Result::Ok(arr)
+                ::std::result::Result::Ok(arr)
             }
         }
 
@@ -1503,9 +1503,9 @@ macro_rules! decl_arr_from_record {
         }
 
         impl<T: FromRecord + Default> Mutator<[T; $i]> for Record {
-            fn mutate(&self, v: &mut [T; $i]) -> std::result::Result<(), String> {
+            fn mutate(&self, v: &mut [T; $i]) -> ::std::result::Result<(), String> {
                 *v = <[T; $i]>::from_record(self)?;
-                std::result::Result::Ok(())
+                ::std::result::Result::Ok(())
             }
         }
     };
@@ -1639,14 +1639,14 @@ macro_rules! decl_struct_into_record {
     ( $n:ident [ $nstr:expr ] <$( $targ:ident),*>, $( $arg:ident ),* ) => {
         impl <$($targ: $crate::record::IntoRecord),*> $crate::record::IntoRecord for $n<$($targ),*> {
             fn into_record(self) -> $crate::record::Record {
-                $crate::record::Record::NamedStruct(std::borrow::Cow::from($nstr),vec![$((std::borrow::Cow::from(stringify!($arg)), self.$arg.into_record())),*])
+                $crate::record::Record::NamedStruct(::std::borrow::Cow::from($nstr),vec![$((::std::borrow::Cow::from(stringify!($arg)), self.$arg.into_record())),*])
             }
         }
     };
     ( $n:ident, <$( $targ:ident),*>, $( $arg:ident ),* ) => {
         impl <$($targ: $crate::record::IntoRecord),*> $crate::record::IntoRecord for $n<$($targ),*> {
             fn into_record(self) -> $crate::record::Record {
-                $crate::record::Record::NamedStruct(std::borrow::Cow::from(stringify!($n)),vec![$((std::borrow::Cow::from(stringify!($arg)), self.$arg.into_record())),*])
+                $crate::record::Record::NamedStruct(::std::borrow::Cow::from(stringify!($n)),vec![$((::std::borrow::Cow::from(stringify!($arg)), self.$arg.into_record())),*])
             }
         }
     };
@@ -1658,10 +1658,10 @@ macro_rules! decl_record_mutator_struct {
         impl<$($targ),*> $crate::record::Mutator<$n<$($targ),*>> for $crate::record::Record
             where $($crate::record::Record: $crate::record::Mutator<$targ>),*
         {
-            fn mutate(&self, _x: &mut $n<$($targ),*>) -> std::result::Result<(), String> {
+            fn mutate(&self, _x: &mut $n<$($targ),*>) -> ::std::result::Result<(), String> {
                 match self {
                     $crate::record::Record::PosStruct(..) => {
-                        return std::result::Result::Err(format!("Cannot use positional struct as mutator"));
+                        return ::std::result::Result::Err(format!("Cannot use positional struct as mutator"));
                     },
                     $crate::record::Record::NamedStruct(_, _args) => {
                         $(if let Some(arg_upd) = $crate::record::arg_find(_args, stringify!($arg)) {
@@ -1669,10 +1669,10 @@ macro_rules! decl_record_mutator_struct {
                           };)*
                     },
                     _ => {
-                        return std::result::Result::Err(format!("not a struct {:?}", *self));
+                        return ::std::result::Result::Err(format!("not a struct {:?}", *self));
                     }
                 };
-                std::result::Result::Ok(())
+                ::std::result::Result::Ok(())
             }
         }
     };
@@ -1684,10 +1684,10 @@ macro_rules! decl_record_mutator_enum {
         impl<$($targ: $crate::record::FromRecord+serde::de::DeserializeOwned+Default),*> $crate::record::Mutator<$n<$($targ),*>> for $crate::record::Record
             where $($crate::record::Record: $crate::record::Mutator<$targ>),*
         {
-            fn mutate(&self, x: &mut $n<$($targ),*>) -> std::result::Result<(), String> {
+            fn mutate(&self, x: &mut $n<$($targ),*>) -> ::std::result::Result<(), String> {
                 match self {
                     $crate::record::Record::PosStruct(..) => {
-                        return std::result::Result::Err(format!("Cannot use positional struct as mutator"));
+                        return ::std::result::Result::Err(format!("Cannot use positional struct as mutator"));
                     },
                     $crate::record::Record::NamedStruct(constr, args) => {
                         match (x, constr.as_ref()) {
@@ -1707,10 +1707,10 @@ macro_rules! decl_record_mutator_enum {
                         }
                     },
                     _ => {
-                        return std::result::Result::Err(format!("not a struct {:?}", *self));
+                        return ::std::result::Result::Err(format!("not a struct {:?}", *self));
                     }
                 };
-                std::result::Result::Ok(())
+                ::std::result::Result::Ok(())
             }
         }
     };
@@ -1722,7 +1722,7 @@ macro_rules! decl_enum_into_record {
         impl <$($targ: $crate::record::IntoRecord),*> $crate::record::IntoRecord for $n<$($targ),*> {
             fn into_record(self) -> $crate::record::Record {
                 match self {
-                    $($n::$cons{$($arg),*} => $crate::record::Record::NamedStruct(std::borrow::Cow::from($consn), vec![$((std::borrow::Cow::from(stringify!($arg)), $arg.into_record())),*])),*
+                    $($n::$cons{$($arg),*} => $crate::record::Record::NamedStruct(::std::borrow::Cow::from($consn), vec![$((::std::borrow::Cow::from(stringify!($arg)), $arg.into_record())),*])),*
                 }
             }
         }
@@ -1731,7 +1731,7 @@ macro_rules! decl_enum_into_record {
         impl <$($targ: $crate::record::IntoRecord),*> $crate::record::IntoRecord for $n<$($targ),*> {
             fn into_record(self) -> $crate::record::Record {
                 match self {
-                    $($n::$cons($($arg),*) => $crate::record::Record::NamedStruct(std::borrow::Cow::from($consn), vec![$((std::borrow::Cow::from(stringify!($arg)), $arg.into_record())),*])),*
+                    $($n::$cons($($arg),*) => $crate::record::Record::NamedStruct(::std::borrow::Cow::from($consn), vec![$((::std::borrow::Cow::from(stringify!($arg)), $arg.into_record())),*])),*
                 }
             }
         }

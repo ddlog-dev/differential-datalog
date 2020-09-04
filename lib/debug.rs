@@ -1,9 +1,7 @@
-use differential_datalog::record::IntoRecord;
-
-use std::fmt;
-use std::fs::OpenOptions;
-use std::io::Write;
-use std::string::ToString;
+use ::std::fmt;
+use ::std::fs::OpenOptions;
+use ::std::io::Write;
+use ::std::string::ToString;
 
 pub fn debug_event<T1: ToString, A1: Clone + IntoRecord, A2: Clone + IntoRecord>(
     operator_id: &(u32, u32, u32),
@@ -76,7 +74,7 @@ pub fn debug_split_group<'a, K, I: 'static + Clone, V: 'static>(
         crate::std::Group::new(
             g.key,
             g.group,
-            std::rc::Rc::new(move |v| (orig_project)(v).1),
+            ::std::rc::Rc::new(move |v| (orig_project)(v).1),
         ),
     )
 }

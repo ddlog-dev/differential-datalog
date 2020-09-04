@@ -4,30 +4,28 @@ use ::differential_datalog::int;
 use ::differential_datalog::ddval::DDValue;
 use ::differential_datalog::program::Weight;
 use ::differential_datalog::record::arg_extract;
-use ::differential_datalog::record::FromRecord;
-use ::differential_datalog::record::IntoRecord;
-use ::differential_datalog::record::Mutator;
 use ::differential_datalog::record::Record;
 
 use ::fnv::FnvHasher;
 use ::serde::de::Deserializer;
 use ::serde::ser::Serializer;
 
-use std::borrow;
-use std::cmp;
-use std::collections::btree_map;
-use std::collections::btree_set;
-use std::collections::{BTreeMap, BTreeSet};
-use std::fmt;
-use std::fmt::Display;
-use std::hash::Hash;
-use std::hash::Hasher;
-use std::iter::FromIterator;
-use std::ops;
-use std::option;
-use std::result;
-use std::slice;
-use std::vec;
+use ::std::borrow;
+use ::std::cmp;
+use ::std::collections::btree_map;
+use ::std::collections::btree_set;
+use ::std::collections::{BTreeMap, BTreeSet};
+use ::std::fmt;
+use ::std::fmt::Display;
+use ::std::hash::Hash;
+use ::std::hash::Hasher;
+use ::std::iter::FromIterator;
+use ::std::ops;
+use ::std::ops::Deref;
+use ::std::option;
+use ::std::result;
+use ::std::slice;
+use ::std::vec;
 
 #[cfg(feature = "flatbuf")]
 use flatbuf::{FBIter, FromFlatBuffer, ToFlatBuffer, ToFlatBufferTable, ToFlatBufferVectorElement};
@@ -173,7 +171,7 @@ pub fn std2option<T>(x: Option<T>) -> ::std::option::Option<T> {
 }
 
 impl<T> From<::std::option::Option<T>> for Option<T> {
-    fn from(x: Option<T>) -> Self {
+    fn from(x: ::std::option::Option<T>) -> Self {
         option2std(x)
     }
 }
@@ -265,11 +263,11 @@ pub fn range<A: Clone + Ord + ops::Add<Output = A> + PartialOrd>(
 
 #[derive(Eq, Ord, Clone, Hash, PartialEq, PartialOrd, Default)]
 pub struct Vec<T> {
-    pub x: Vec<T>,
+    pub x: ::std::vec::Vec<T>,
 }
 
 impl<T: Serialize> Serialize for Vec<T> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> ::std::result::Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
@@ -278,11 +276,11 @@ impl<T: Serialize> Serialize for Vec<T> {
 }
 
 impl<'de, T: Deserialize<'de>> Deserialize<'de> for Vec<T> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        Vec::deserialize(deserializer).map(|x| Vec { x })
+        ::std::vec::Vec::deserialize(deserializer).map(|x| Vec { x })
     }
 }
 
@@ -301,11 +299,11 @@ impl<'a, X> VecIter<'a, X> {
 impl<'a, X> Iterator for VecIter<'a, X> {
     type Item = &'a X;
 
-    fn next(&mut self) -> Option<Self::Item> {
+    fn next(&mut self) -> ::std::option::Option<Self::Item> {
         self.iter.next()
     }
 
-    fn size_hint(&self) -> (usize, Option<usize>) {
+    fn size_hint(&self) -> (usize, ::std::option::Option<usize>) {
         self.iter.size_hint()
     }
 }
@@ -318,11 +316,11 @@ impl<'a, T> Vec<T> {
 
 impl<T> Vec<T> {
     pub fn new() -> Self {
-        Vec { x: Vec::new() }
+        Vec { x: ::std::vec::Vec::new() }
     }
     pub fn with_capacity(capacity: usize) -> Self {
         Vec {
-            x: Vec::with_capacity(capacity),
+            x: ::std::vec::Vec::with_capacity(capacity),
         }
     }
     pub fn push(&mut self, v: T) {
@@ -332,12 +330,12 @@ impl<T> Vec<T> {
 
 impl<T: Clone> From<&[T]> for Vec<T> {
     fn from(s: &[T]) -> Self {
-        Vec { x: Vec::from(s) }
+        Vec { x: ::std::vec::Vec::from(s) }
     }
 }
 
-impl<T: Clone> From<Vec<T>> for Vec<T> {
-    fn from(x: Vec<T>) -> Self {
+impl<T: Clone> From<::std::vec::Vec<T>> for Vec<T> {
+    fn from(x: ::std::vec::Vec<T>) -> Self {
         Vec { x }
     }
 }
@@ -360,8 +358,8 @@ impl<T: Clone> Vec<T> {
 }
 
 impl<T: FromRecord> FromRecord for Vec<T> {
-    fn from_record(val: &Record) -> Result<Self, String> {
-        Vec::from_record(val).map(|x| Vec { x })
+    fn from_record(val: &Record) -> ::std::result::Result<Self, String> {
+        ::std::vec::Vec::from_record(val).map(|x| Vec { x })
     }
 }
 
@@ -372,7 +370,7 @@ impl<T: IntoRecord> IntoRecord for Vec<T> {
 }
 
 impl<T: FromRecord> Mutator<Vec<T>> for Record {
-    fn mutate(&self, vec: &mut Vec<T>) -> Result<(), String> {
+    fn mutate(&self, vec: &mut Vec<T>) -> ::std::result::Result<(), String> {
         self.mutate(&mut vec.x)
     }
 }
@@ -459,21 +457,21 @@ where
     }
 }
 
-pub fn vec_len<X: Ord + Clone>(v: &Vec<X>) -> usize {
-    v.x.len() as usize
+pub fn vec_len<X: Ord + Clone>(v: &Vec<X>) -> std_usize {
+    v.x.len() as std_usize
 }
 
 pub fn vec_empty<X: Ord + Clone>() -> Vec<X> {
     Vec::new()
 }
 
-pub fn vec_with_length<X: Ord + Clone>(len: &usize, x: &X) -> Vec<X> {
+pub fn vec_with_length<X: Ord + Clone>(len: &std_usize, x: &X) -> Vec<X> {
     let mut res = Vec::with_capacity(*len as usize);
     res.resize(*len as usize, x);
     res
 }
 
-pub fn vec_with_capacity<X: Ord + Clone>(len: &usize) -> Vec<X> {
+pub fn vec_with_capacity<X: Ord + Clone>(len: &std_usize) -> Vec<X> {
     Vec::with_capacity(*len as usize)
 }
 
@@ -503,7 +501,7 @@ pub fn vec_is_empty<X: Ord>(v: &Vec<X>) -> bool {
     v.x.is_empty()
 }
 
-pub fn vec_nth<X: Ord + Clone>(v: &Vec<X>, n: &usize) -> Option<X> {
+pub fn vec_nth<X: Ord + Clone>(v: &Vec<X>, n: &std_usize) -> Option<X> {
     option2std(v.x.get(*n as usize).cloned())
 }
 
@@ -523,19 +521,19 @@ pub fn vec_sort_imm<X: Ord + Clone>(v: &Vec<X>) -> Vec<X> {
     res
 }
 
-pub fn vec_resize<X: Clone>(v: &mut Vec<X>, new_len: &usize, value: &X) {
+pub fn vec_resize<X: Clone>(v: &mut Vec<X>, new_len: &std_usize, value: &X) {
     v.resize(*new_len as usize, value)
 }
 
-pub fn vec_swap_nth<X: Clone>(v: &mut Vec<X>, idx: &usize, value: &mut X) -> bool {
+pub fn vec_swap_nth<X: Clone>(v: &mut Vec<X>, idx: &std_usize, value: &mut X) -> bool {
     if (*idx as usize) < v.x.len() {
-        std::mem::swap(&mut v.x[*idx as usize], value);
+        ::std::mem::swap(&mut v.x[*idx as usize], value);
         return true;
     };
     return false;
 }
 
-pub fn vec_update_nth<X: Clone>(v: &mut Vec<X>, idx: &usize, value: &X) -> bool {
+pub fn vec_update_nth<X: Clone>(v: &mut Vec<X>, idx: &std_usize, value: &X) -> bool {
     if (*idx as usize) < v.x.len() {
         v.x[*idx as usize] = value.clone();
         return true;
@@ -551,7 +549,7 @@ pub struct Set<T: Ord> {
 }
 
 impl<T: Ord + Serialize> Serialize for Set<T> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> ::std::result::Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
@@ -560,7 +558,7 @@ impl<T: Ord + Serialize> Serialize for Set<T> {
 }
 
 impl<'de, T: Ord + Deserialize<'de>> Deserialize<'de> for Set<T> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
@@ -583,11 +581,11 @@ impl<'a, X: Ord> SetIter<'a, X> {
 impl<'a, X> Iterator for SetIter<'a, X> {
     type Item = &'a X;
 
-    fn next(&mut self) -> Option<Self::Item> {
+    fn next(&mut self) -> ::std::option::Option<Self::Item> {
         self.iter.next()
     }
 
-    fn size_hint(&self) -> (usize, Option<usize>) {
+    fn size_hint(&self) -> (usize, ::std::option::Option<usize>) {
         self.iter.size_hint()
     }
 }
@@ -608,7 +606,7 @@ impl<T: Ord> Set<T> {
 }
 
 impl<T: FromRecord + Ord> FromRecord for Set<T> {
-    fn from_record(val: &Record) -> Result<Self, String> {
+    fn from_record(val: &Record) -> ::std::result::Result<Self, String> {
         BTreeSet::from_record(val).map(|x| Set { x })
     }
 }
@@ -620,7 +618,7 @@ impl<T: IntoRecord + Ord> IntoRecord for Set<T> {
 }
 
 impl<T: FromRecord + Ord> Mutator<Set<T>> for Record {
-    fn mutate(&self, set: &mut Set<T>) -> Result<(), String> {
+    fn mutate(&self, set: &mut Set<T>) -> ::std::result::Result<(), String> {
         self.mutate(&mut set.x)
     }
 }
@@ -720,8 +718,8 @@ where
     }
 }
 
-pub fn set_size<X: Ord + Clone>(s: &Set<X>) -> usize {
-    s.x.len() as usize
+pub fn set_size<X: Ord + Clone>(s: &Set<X>) -> std_usize {
+    s.x.len() as std_usize
 }
 
 pub fn set_empty<X: Ord + Clone>() -> Set<X> {
@@ -752,7 +750,7 @@ pub fn set_is_empty<X: Ord>(s: &Set<X>) -> bool {
     s.x.is_empty()
 }
 
-pub fn set_nth<X: Ord + Clone>(s: &Set<X>, n: &usize) -> Option<X> {
+pub fn set_nth<X: Ord + Clone>(s: &Set<X>, n: &std_usize) -> Option<X> {
     option2std(s.x.iter().nth(*n as usize).cloned())
 }
 
@@ -796,7 +794,7 @@ pub struct Map<K: Ord, V> {
 }
 
 impl<K: Ord + Serialize, V: Serialize> Serialize for Map<K, V> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> ::std::result::Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
@@ -805,7 +803,7 @@ impl<K: Ord + Serialize, V: Serialize> Serialize for Map<K, V> {
 }
 
 impl<'de, K: Ord + Deserialize<'de>, V: Deserialize<'de>> Deserialize<'de> for Map<K, V> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
@@ -828,11 +826,11 @@ impl<'a, K: Ord, V> MapIter<'a, K, V> {
 impl<'a, K: Clone, V: Clone> Iterator for MapIter<'a, K, V> {
     type Item = (K, V);
 
-    fn next(&mut self) -> Option<Self::Item> {
+    fn next(&mut self) -> ::std::option::Option<Self::Item> {
         self.iter.next().map(|(k, v)| (k.clone(), v.clone()))
     }
 
-    fn size_hint(&self) -> (usize, Option<usize>) {
+    fn size_hint(&self) -> (usize, ::std::option::Option<usize>) {
         self.iter.size_hint()
     }
 }
@@ -853,7 +851,7 @@ impl<K: Ord, V> Map<K, V> {
 }
 
 impl<K: FromRecord + Ord, V: FromRecord> FromRecord for Map<K, V> {
-    fn from_record(val: &Record) -> Result<Self, String> {
+    fn from_record(val: &Record) -> ::std::result::Result<Self, String> {
         BTreeMap::from_record(val).map(|x| Map { x })
     }
 }
@@ -865,7 +863,7 @@ impl<K: IntoRecord + Ord, V: IntoRecord> IntoRecord for Map<K, V> {
 }
 
 impl<K: FromRecord + Ord, V: FromRecord + PartialEq> Mutator<Map<K, V>> for Record {
-    fn mutate(&self, map: &mut Map<K, V>) -> Result<(), String> {
+    fn mutate(&self, map: &mut Map<K, V>) -> ::std::result::Result<(), String> {
         self.mutate(&mut map.x)
     }
 }
@@ -955,8 +953,8 @@ where
     }
 }
 
-pub fn map_size<K: Ord, V>(m: &Map<K, V>) -> usize {
-    m.x.len() as usize
+pub fn map_size<K: Ord, V>(m: &Map<K, V>) -> std_usize {
+    m.x.len() as std_usize
 }
 
 pub fn map_empty<K: Ord + Clone, V: Clone>() -> Map<K, V> {
@@ -1039,7 +1037,7 @@ pub fn string_contains(s1: &String, s2: &String) -> bool {
     s1.contains(s2.as_str())
 }
 
-pub fn string_substr(s: &String, start: &usize, end: &usize) -> String {
+pub fn string_substr(s: &String, start: &std_usize, end: &std_usize) -> String {
     let len = s.len();
     let from = cmp::min(*start as usize, len);
     let to = cmp::max(from, cmp::min(*end as usize, len));
@@ -1062,8 +1060,8 @@ pub fn string_trim(s: &String) -> String {
     s.trim().to_string()
 }
 
-pub fn string_len(s: &String) -> usize {
-    s.len() as usize
+pub fn string_len(s: &String) -> std_usize {
+    s.len() as std_usize
 }
 
 pub fn string_to_bytes(s: &String) -> Vec<u8> {
@@ -1106,7 +1104,7 @@ pub fn hash128<T: Hash>(x: &T) -> u128 {
     ((w1 as u128) << 64) | (w2 as u128)
 }
 
-pub type ProjectFunc<X> = std::rc::Rc<dyn Fn(&DDValue) -> X>;
+pub type ProjectFunc<X> = ::std::rc::Rc<dyn Fn(&DDValue) -> X>;
 
 /*
  * Group type (used in aggregation operators)
@@ -1137,14 +1135,14 @@ impl<'a, V> GroupIter<'a, V> {
 impl<'a, V> Iterator for GroupIter<'a, V> {
     type Item = V;
 
-    fn next(&mut self) -> Option<Self::Item> {
+    fn next(&mut self) -> ::std::option::Option<Self::Item> {
         match self.iter.next() {
             None => None,
             Some((x, _)) => Some((self.project)(x)),
         }
     }
 
-    fn size_hint(&self) -> (usize, Option<usize>) {
+    fn size_hint(&self) -> (usize, ::std::option::Option<usize>) {
         self.iter.size_hint()
     }
 }
@@ -1168,15 +1166,15 @@ impl<'a, K, V> Group<'a, K, V> {
         }
     }
 
-    fn size(&self) -> usize {
-        self.group.len() as usize
+    fn size(&self) -> std_usize {
+        self.group.len() as std_usize
     }
 
     fn first(&'a self) -> V {
         (self.project)(self.group[0].0)
     }
 
-    fn nth_unchecked(&'a self, n: usize) -> V {
+    fn nth_unchecked(&'a self, n: std_usize) -> V {
         (self.project)(self.group[n as usize].0)
     }
 
@@ -1186,7 +1184,7 @@ impl<'a, K, V> Group<'a, K, V> {
 }
 
 impl<'a, K, V> Group<'a, K, V> {
-    fn nth(&'a self, n: usize) -> Option<V> {
+    fn nth(&'a self, n: std_usize) -> Option<V> {
         if self.size() > n {
             Option::Some {
                 x: (self.project)(self.group[n as usize].0),
@@ -1204,7 +1202,7 @@ pub fn group_key<K: Clone, V>(g: &Group<K, V>) -> K {
 /*
  * Standard aggregation functions
  */
-pub fn group_count<K, V>(g: &Group<K, V>) -> usize {
+pub fn group_count<K, V>(g: &Group<K, V>) -> std_usize {
     g.size()
 }
 
@@ -1212,7 +1210,7 @@ pub fn group_first<K, V>(g: &Group<K, V>) -> V {
     g.first()
 }
 
-pub fn group_nth<K, V>(g: &Group<K, V>, n: &usize) -> Option<V> {
+pub fn group_nth<K, V>(g: &Group<K, V>, n: &std_usize) -> Option<V> {
     g.nth(*n)
 }
 
@@ -1305,7 +1303,7 @@ pub fn group_sum<K, V: ops::Add<Output = V>>(g: &Group<K, V>) -> V {
 pub struct tuple0;
 
 impl FromRecord for tuple0 {
-    fn from_record(val: &Record) -> Result<Self, String> {
+    fn from_record(val: &Record) -> ::std::result::Result<Self, String> {
         <()>::from_record(val).map(|_| tuple0)
     }
 }
@@ -1321,7 +1319,7 @@ macro_rules! decl_tuple {
         #[derive(Default, Eq, Ord, Clone, Hash, PartialEq, PartialOrd, Serialize, Deserialize, Debug)]
         pub struct $name< $($t),* >($(pub $t),*);
         impl <$($t: FromRecord),*> FromRecord for $name<$($t),*> {
-            fn from_record(val: &Record) -> Result<Self, String> {
+            fn from_record(val: &Record) -> ::std::result::Result<Self, String> {
                 <($($t),*)>::from_record(val).map(|($($t),*)|$name($($t),*))
             }
         }
@@ -1334,7 +1332,7 @@ macro_rules! decl_tuple {
         }
 
         impl <$($t: FromRecord),*> Mutator<$name<$($t),*>> for Record {
-            fn mutate(&self, x: &mut $name<$($t),*>) -> Result<(), String> {
+            fn mutate(&self, x: &mut $name<$($t),*>) -> ::std::result::Result<(), String> {
                 *x = <$name<$($t),*>>::from_record(self)?;
                 Ok(())
             }

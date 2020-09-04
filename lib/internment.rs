@@ -1,12 +1,9 @@
-use differential_datalog::record;
-use differential_datalog::record::FromRecord;
-use differential_datalog::record::IntoRecord;
-use differential_datalog::record::Mutator;
-use differential_datalog::record::Record;
-use std::cmp;
-use std::fmt;
-use std::hash::Hash;
-use std::ops::Deref;
+use ::differential_datalog::record;
+use ::differential_datalog::record::Record;
+use ::std::cmp;
+use ::std::fmt;
+use ::std::hash::Hash;
+use ::std::ops::Deref;
 
 
 #[cfg(feature = "flatbuf")]
@@ -29,7 +26,7 @@ where
 }
 
 impl<A: Eq + Send + Sync + Hash + 'static> PartialOrd for Intern<A> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
         let sptr = self.as_ref() as *const A as usize;
         let optr = other.as_ref() as *const A as usize;
 
@@ -38,7 +35,7 @@ impl<A: Eq + Send + Sync + Hash + 'static> PartialOrd for Intern<A> {
 }
 
 impl<A: Eq + Send + Sync + Hash + 'static> Ord for Intern<A> {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
         let sptr = self.as_ref() as *const A as usize;
         let optr = other.as_ref() as *const A as usize;
 
@@ -221,7 +218,7 @@ pub fn istring_contains(s1: &istring, s2: &String) -> bool {
     s1.as_ref().contains(s2.as_str())
 }
 
-pub fn istring_substr(s: &istring, start: &crate::std::usize, end: &crate::std::usize) -> String {
+pub fn istring_substr(s: &istring, start: &std_usize, end: &std_usize) -> String {
     let len = s.as_ref().len();
     let from = cmp::min(*start as usize, len);
     let to = cmp::max(from, cmp::min(*end as usize, len));
@@ -244,8 +241,8 @@ pub fn istring_trim(s: &istring) -> String {
     s.as_ref().trim().to_string()
 }
 
-pub fn istring_len(s: &istring) -> crate::std::usize {
-    s.as_ref().len() as crate::std::usize
+pub fn istring_len(s: &istring) -> std_usize {
+    s.as_ref().len() as std_usize
 }
 
 pub fn istring_to_bytes(s: &istring) -> crate::std::Vec<u8> {

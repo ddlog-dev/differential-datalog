@@ -1,6 +1,6 @@
-use ordered_float::OrderedFloat;
-use std::result::Result;
-use serde::de::DeserializeOwned;
+use ::ordered_float::OrderedFloat;
+use ::std::result::Result;
+use ::serde::de::DeserializeOwned;
 
 use crate::std::res2std;
 use crate::internment;
@@ -193,7 +193,7 @@ pub mod serde_string {
     where
         D: Deserializer<'de>,
         T: std::str::FromStr,
-        <T as std::str::FromStr>::Err: std::fmt::Display,
+        <T as std::str::FromStr>::Err: ::std::fmt::Display,
     {
         T::from_str(&String::deserialize(deserializer)?).map_err(|e| de::Error::custom(e))
     }

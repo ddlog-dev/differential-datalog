@@ -18,6 +18,9 @@
 // Required for #[derive(Serialize, Deserialize)].
 use ::serde::Deserialize;
 use ::serde::Serialize;
+use ::differential_datalog::record::FromRecord;
+use ::differential_datalog::record::IntoRecord;
+use ::differential_datalog::record::Mutator;
 
 // Import statics from the main library.
 use crate::*;

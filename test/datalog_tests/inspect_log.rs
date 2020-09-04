@@ -1,5 +1,5 @@
-use std::fs::OpenOptions;
-use std::io::Write;
+use ::std::fs::OpenOptions;
+use ::std::io::Write;
 
 /*
  * Logs the given 'msg' to a file 'filename'.

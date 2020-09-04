@@ -10,7 +10,7 @@ import {-# SOURCE #-} Language.DifferentialDatalog.Type
 
 mkValConstructorName :: DatalogProgram -> Type -> Doc
 mkConstructorName :: String -> Type -> String -> Doc
-mkType :: (WithType a) => a -> Doc
+mkType :: (WithType a) => DatalogProgram -> a -> Doc
 rnameFlat :: String -> Doc
 rnameScoped :: String -> Doc
 

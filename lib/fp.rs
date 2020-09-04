@@ -1,7 +1,8 @@
-use differential_datalog::int::*;
-use differential_datalog::uint::*;
-use num::bigint::BigInt;
-use ordered_float::OrderedFloat;
+use ::differential_datalog::int::*;
+use ::differential_datalog::uint::*;
+use ::num::bigint::BigInt;
+use ::num_traits::cast::FromPrimitive;
+use ::ordered_float::OrderedFloat;
 
 pub fn floor_f(f: &OrderedFloat<f32>) -> OrderedFloat<f32> {
     OrderedFloat::<f32>(f.floor())
@@ -156,7 +157,7 @@ pub fn log_f(n: &OrderedFloat<f32>, base: &OrderedFloat<f32>) -> OrderedFloat<f3
 }
 
 pub fn nan_f() -> OrderedFloat<f32> {
-    OrderedFloat::<f32>(std::f32::NAN)
+    OrderedFloat::<f32>(::std::f32::NAN)
 }
 
 //-------------------------------
@@ -314,7 +315,7 @@ pub fn log_d(n: &OrderedFloat<f64>, base: &OrderedFloat<f64>) -> OrderedFloat<f6
 }
 
 pub fn nan_d() -> OrderedFloat<f64> {
-    OrderedFloat::<f64>(std::f64::NAN)
+    OrderedFloat::<f64>(::std::f64::NAN)
 }
 
 pub fn int_from_f(v: &OrderedFloat<f32>) -> crate::std::Option<Int> {
