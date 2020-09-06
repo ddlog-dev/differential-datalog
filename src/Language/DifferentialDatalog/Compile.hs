@@ -1346,7 +1346,7 @@ mkValType d types =
     mkVal :: Type -> Doc
     mkVal t =
         "#[derive(Default, Eq, Ord, Clone, Hash, PartialEq, PartialOrd, Serialize, Deserialize, Debug)]"            $$
-        "pub struct" <+> tname <+> parens ("pub" <+> mkType d t) <> ";"                                             $$
+        "pub struct" <+> tname <+> parens ("pub" <+> mkTypeScoped d "types::" t) <> ";"                             $$
         "impl abomonation::Abomonation for" <+> tname <+> "{}"                                                      $$
         "impl ::std::fmt::Display for" <+> tname <+> "{"                                                            $$
         "    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {"                              $$
@@ -2769,6 +2769,9 @@ mkFuncNameShort d f | length namesakes == 1 = pp $ nameLocal $ name f
 
 mkType :: (WithType a) => DatalogProgram -> a -> Doc
 mkType d x = mkType' d empty $ typ x
+
+mkTypeScoped :: (WithType a) => DatalogProgram -> Doc -> a -> Doc
+mkTypeScoped d scope x = mkType' d scope $ typ x
 
 mkType' :: DatalogProgram -> Doc -> Type -> Doc
 mkType' _ _       TBool{}                    = "bool"

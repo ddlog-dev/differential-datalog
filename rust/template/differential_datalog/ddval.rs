@@ -94,7 +94,7 @@ pub struct DDValMethods {
     pub fmt_debug: fn(this: &DDVal, f: &mut Formatter) -> Result<(), std::fmt::Error>,
     pub fmt_display: fn(this: &DDVal, f: &mut Formatter) -> Result<(), std::fmt::Error>,
     pub drop: fn(this: &mut DDVal),
-    pub ddval_serialize: fn(this: &DDVal) -> &dyn DDValSerialize,
+    pub ddval_serialize: fn(this: &DDVal) -> &dyn erased_serde::Serialize,
 }
 
 impl Drop for DDValue {
@@ -144,10 +144,11 @@ impl Serialize for DDValue {
     where
         S: Serializer,
     {
-        (self.vtable.ddval_serialize)(&self.val).serialize(serializer)
+        erased_serde::serialize((self.vtable.ddval_serialize)(&self.val), serializer)
     }
 }
 
+/*
 impl<'de> Deserialize<'de> for DDValue {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -157,6 +158,7 @@ impl<'de> Deserialize<'de> for DDValue {
         Ok(val.ddvalue())
     }
 }
+*/
 
 impl Display for DDValue {
     fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
@@ -237,7 +239,6 @@ pub trait DDValConvert: Sized {
     fn into_ddvalue(self) -> DDValue;
 }
 
-#[typetag::serde]
 pub trait DDValSerialize {
     fn ddvalue(&self) -> DDValue;
 }
@@ -250,7 +251,6 @@ pub trait DDValSerialize {
 #[macro_export]
 macro_rules! decl_ddval_convert {
     ( $t:ty ) => {
-        #[typetag::serde]
         impl $crate::ddval::DDValSerialize for $t {
             fn ddvalue(&self) -> $crate::ddval::DDValue {
                 $crate::ddval::DDValConvert::into_ddvalue(self.clone())
@@ -410,8 +410,8 @@ macro_rules! decl_ddval_convert {
                         __f
                     },
                     ddval_serialize: {
-                        fn __f(this: &$crate::ddval::DDVal) -> &dyn $crate::ddval::DDValSerialize {
-                            unsafe { <$t>::from_ddval_ref(this) }
+                        fn __f(this: &$crate::ddval::DDVal) -> &dyn erased_serde::Serialize {
+                            (unsafe { <$t>::from_ddval_ref(this) }) as &dyn erased_serde::Serialize
                         };
                         __f
                     },
