@@ -222,7 +222,7 @@ rustLibFiles specname =
         , (dir </> "ovsdb/Cargo.toml"                                     , $(embedFile "rust/template/ovsdb/Cargo.toml"))
         , (dir </> "ovsdb/lib.rs"                                         , $(embedFile "rust/template/ovsdb/lib.rs"))
         , (dir </> "ovsdb/test.rs"                                        , $(embedFile "rust/template/ovsdb/test.rs"))
-        , (dir </> "types/log.rs"                                         , $(embedFile "rust/template/types/log.rs"))
+        , (dir </> "types/ddlog_log.rs"                                   , $(embedFile "rust/template/types/ddlog_log.rs"))
         , (dir </> "value/Cargo.toml"                                     , $(embedFile "rust/template/value/Cargo.toml"))
         , (dir </> ".cargo/config"                                        , $(embedFile "rust/template/.cargo/config"))
         ]
@@ -1780,10 +1780,10 @@ mkFilterMap d prefix rl idx = do
 mkInspect :: (?cfg::Config, ?statics::Statics) => DatalogProgram -> Doc -> Rule -> Int -> Expr -> Bool -> CompilerMonad Doc
 mkInspect d prefix rl idx e input_val = do
     -- Inspected
-    let weight = "let ddlog_weight = &(" <> wEIGHT_VAR <> " as" <+> pp mOD_STD <> "_DDWeight);"
+    let weight = "let ddlog_weight = &(" <> wEIGHT_VAR <+> "as" <+> rnameScoped wEIGHT_TYPE <> ");"
     let timestamp = if ruleIsRecursive d rl
-        then "let ddlog_timestamp = &" <> pp mOD_STD <> "_DDNestedTS{epoch:" <+> tIMESTAMP_VAR <> ".0 as" <+> pp mOD_STD <> "_DDEpoch, iter:" <+> tIMESTAMP_VAR <> ".1.x as" <+> pp mOD_STD <> "_DDIteration};"
-        else "let ddlog_timestamp = &(" <> tIMESTAMP_VAR <> ".0 as" <+> pp mOD_STD <> "_DDEpoch);"
+        then "let ddlog_timestamp = &" <> rnameScoped nESTED_TS_TYPE <> "{epoch:" <+> tIMESTAMP_VAR <> ".0 as" <+> rnameScoped ePOCH_TYPE <> ", iter:" <+> tIMESTAMP_VAR <> ".1.x as" <+> rnameScoped iTERATION_TYPE <> "};"
+        else "let ddlog_timestamp = &(" <> tIMESTAMP_VAR <> ".0 as" <+> rnameScoped ePOCH_TYPE <> ");"
     let inspected = (braces $ mkExpr d (CtxRuleRInspect rl idx) e EVal) <> ";"
     let ifun = braces'
                 $ weight $$
@@ -1821,7 +1821,7 @@ mkAggregate d filters input_val rl@Rule{..} idx = do
     let tmap = ruleAggregateTypeParams d rl idx
     let agg_func = getFunc d rhsAggFunc [tOpaque gROUP_TYPE [ktype, vtype]]
     -- Pass group-by variables to the aggregate function.
-    let grp = "&" <> pp mOD_STD <> "_Group::new(&" <> (mkExpr d gctx rhsGroupBy EVal) <> "," <+> gROUP_VAR <> "," <+> project <> ")"
+    let grp = "&" <> rnameScoped gROUP_TYPE <> "::new(&" <> (mkExpr d gctx rhsGroupBy EVal) <> "," <+> gROUP_VAR <> "," <+> project <> ")"
     let tparams = commaSep $ map (\tvar -> mkType d (tmap M.! tvar)) $ funcTypeVars agg_func
     let aggregate = "let" <+> pp rhsVar <+> "=" <+> rnameScoped rhsAggFunc <>
                     "::<" <> tparams <> ">(" <> grp <> ");"
@@ -2754,7 +2754,7 @@ mkExpr' _ _ e = error $ "Compile.mkExpr': unexpected expression at " ++ show (po
 
 mkFuncName :: DatalogProgram -> Function -> Doc
 mkFuncName d f =
-    pp $ intercalate "::" $ "crate" : (modulePath $ nameScope f) ++ [render $ mkFuncNameShort d f]
+    pp $ intercalate "::" $ (modulePath $ nameScope f) ++ [render $ mkFuncNameShort d f]
 
 -- Rust function name without the scope.
 mkFuncNameShort :: DatalogProgram -> Function -> Doc

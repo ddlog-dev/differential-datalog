@@ -63,7 +63,11 @@ addBindingToRHSLiteral (rule, _) = rule
 -- Generate debug function name.
 debugAggregateFunctionName :: Int -> Int -> String -> String
 debugAggregateFunctionName rlidx rhsidx fname =
-    "__debug_" ++ show rlidx ++ "_" ++ show rhsidx ++ "_" ++ fname
+    scoped scope fname_local'
+    where
+    fname_local = nameLocal fname
+    fname_local' = "__debug_" ++ show rlidx ++ "_" ++ show rhsidx ++ "_" ++ fname_local
+    scope = nameScope fname
 
 -- For RHSAggregate, the aggregate function is prepended with
 -- __debug_<rule_idx>_<rhs_idx>.
