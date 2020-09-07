@@ -57,8 +57,6 @@ use std::fmt::Formatter;
 use std::hash::Hash;
 use std::hash::Hasher;
 
-use serde::de::Deserialize;
-use serde::de::Deserializer;
 use serde::ser::Serialize;
 use serde::ser::Serializer;
 
