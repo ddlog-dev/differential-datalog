@@ -101,7 +101,7 @@ pub fn string_append(mut s1: String, s2: &String) -> String {
 
 #[macro_export]
 macro_rules! deserialize_map_from_array {
-    ( $modname:ident, $ktype:ty, $vtype:ty, $kfunc:ident ) => {
+    ( $modname:ident, $ktype:ty, $vtype:ty, $kfunc:path ) => {
         mod $modname {
             use super::*;
             use serde::de::{Deserialize, Deserializer};
@@ -109,7 +109,7 @@ macro_rules! deserialize_map_from_array {
             use std::collections::BTreeMap;
 
             pub fn serialize<S>(
-                map: &__std::std_Map<$ktype, $vtype>,
+                map: &ddlog_std::Map<$ktype, $vtype>,
                 serializer: S,
             ) -> Result<S::Ok, S::Error>
             where
@@ -120,7 +120,7 @@ macro_rules! deserialize_map_from_array {
 
             pub fn deserialize<'de, D>(
                 deserializer: D,
-            ) -> Result<__std::std_Map<$ktype, $vtype>, D::Error>
+            ) -> Result<ddlog_std::Map<$ktype, $vtype>, D::Error>
             where
                 D: Deserializer<'de>,
             {

@@ -130,7 +130,7 @@ function pow32(base: bigint, exp: bit<32>): bigint {
  * Option
  */
 
-#[rust="serde(from=\"Option<A>\", into=\"Option<A>\", bound(serialize=\"A: Clone+Serialize\"))"]
+#[rust="serde(from=\"::std::option::Option<A>\", into=\"::std::option::Option<A>\", bound(serialize=\"A: Clone+Serialize\"))"]
 // This type has a custrom FromRecord implementation in std.rs.
 #[custom_from_record]
 typedef Option<'A> = None

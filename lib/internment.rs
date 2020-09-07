@@ -145,7 +145,7 @@ where
     A: Eq + Hash + Send + Sync + 'static,
     A: FromFlatBuffer<FB>,
 {
-    fn from_flatbuf(fb: FB) -> Response<Self> {
+    fn from_flatbuf(fb: FB) -> Result<Self, String> {
         Ok(Intern::new(A::from_flatbuf(fb)?))
     }
 }

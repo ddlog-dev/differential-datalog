@@ -453,7 +453,7 @@ tuple [x] = x
 tuple xs = parens $ hsep $ punctuate comma xs
 
 tupleTypeName :: [a] -> Doc
-tupleTypeName xs = "tuple" <> pp (length xs)
+tupleTypeName xs = pp mOD_STD <> "::tuple" <> pp (length xs)
 
 -- Rust does not implement Eq and other traits for tuples with >12 elements.
 -- Use structs with n fields for longer tuples.
@@ -473,7 +473,7 @@ mkConstructorName :: String -> Type -> String -> Doc
 mkConstructorName tname t c =
     if isStructType t
        then rnameScoped tname
-       else rnameScoped tname <> "::" <> pp (nameLocal c)
+       else rnameScoped tname <> "::" <> nameLocal c
 
 -- | Create a compilable Cargo crate.  If the crate already exists, only writes files
 -- modified by the recompilation.
@@ -565,17 +565,18 @@ compile d_unoptimized specname modules rs_code toml_code dir crate_types = do
 compileLib :: (?cfg::Config) => DatalogProgram -> String -> [DatalogModule] -> M.Map ModuleName Doc -> (M.Map ModuleName Doc, Doc, Doc)
 compileLib d specname modules rs_code = (typeLibAllFuncs, valueLib, mainLib)
     where
+    modules' = addMissingModules modules
     statics = collectStatics d
     -- Start with empty modules, except the main module that contains statics
     -- declarations.
     typeLib0 = M.fromList $ map (\m -> if moduleName m == mainModuleName
                                        then (moduleName m, typesLibHeader specname $+$ mkStatics d statics)
-                                       else (moduleName m, typesModuleHeader specname)) modules
+                                       else (moduleName m, typesModuleHeader specname)) modules'
     -- Add Rust header, static declarations, module list to the main types module only.
     -- Add submodule lists.
     typeLibMods = M.mapWithKey (\mname mtext ->
                                  let children = filter (\other_mod -> other_mod `moduleIsChildOf` mname)
-                                                $ map moduleName modules
+                                                $ map moduleName modules'
                                  in mtext $+$ vcat (map (\(ModuleName c) -> "pub mod" <+> pp (last c) <> ";") children))
                                typeLib0
     -- Add Rust code.
@@ -616,6 +617,22 @@ compileLib d specname modules rs_code = (typeLibAllFuncs, valueLib, mainLib)
                                                    , cTypes        = types }
     -- Functions
     (fdef, fextern) = partition (isJust . funcDef) $ concat $ M.elems $ progFunctions d
+
+-- DDlog does not require that there exist all intermediate modules in a
+-- hierarchy, e.g., a program can contain module `m1::m2` but not `m1.`  Rust
+-- on the other hand is strict in this sense.  This function injects
+-- intermediate empty modules before generating Rust code to keep the Rust
+-- compiler happy.
+addMissingModules :: [DatalogModule] -> [DatalogModule]
+addMissingModules modules =
+    foldl' (\modules' mname ->
+             if S.member mname module_names
+             then modules'
+             else emptyModule mname : modules') modules all_module_names
+    where
+    module_names = S.fromList $ map moduleName modules
+    all_module_names = S.toList $ S.fromList $ concat $ S.map (\(ModuleName n) -> map ModuleName $ inits n) module_names
+
 
 -- This type stores the set of statically evaluated constant sub-expressions.
 -- We need to track the type of each expression, as generic functions like
@@ -689,7 +706,7 @@ mkTypedef d tdef@TypeDef{..} =
          Just TStruct{..} | length typeCons == 1
                           -> let (fields, extras) = unzip $ map (mkField tdefName True) $ consArgs $ head typeCons in
                              derive_struct                                                             $$
-                             "pub struct" <+> pp (nameLocal tdefName) <> targs <+> "{"                 $$
+                             "pub struct" <+> nameLocal tdefName <> targs <+> "{"                      $$
                              (nest' $ vcat $ punctuate comma fields)                                   $$
                              "}"                                                                       $$
                              impl_abomonate                                                            $$
@@ -701,7 +718,7 @@ mkTypedef d tdef@TypeDef{..} =
                           | otherwise
                           -> let (constructors, extras) = unzip $ map mkConstructor typeCons in
                              derive_enum                                                               $$
-                             "pub enum" <+> pp (nameLocal tdefName) <> targs <+> "{"                   $$
+                             "pub enum" <+> nameLocal tdefName <> targs <+> "{"                        $$
                              (nest' $ vcat $ punctuate comma constructors)                             $$
                              "}"                                                                       $$
                              impl_abomonate                                                            $$
@@ -711,7 +728,7 @@ mkTypedef d tdef@TypeDef{..} =
                              display                                                                   $$
                              default_enum                                                              $$
                              vcat extras
-         Just t           -> "pub type" <+> pp (nameLocal tdefName) <+> targs <+> "=" <+> mkType d t <> ";"
+         Just t           -> "pub type" <+> nameLocal tdefName <+> targs <+> "=" <+> mkType d t <> ";"
          Nothing          -> empty -- The user must provide definitions of opaque types
     where
     rustAttrs = getRustAttrs d tdefAttrs
@@ -729,7 +746,7 @@ mkTypedef d tdef@TypeDef{..} =
                     else "<" <> (hsep $ punctuate comma $ map ((<> ": ::std::fmt::Debug") . pp) tdefArgs) <> ">"
     targs_def = if null tdefArgs
                    then empty
-                   else "<" <> (hsep $ punctuate comma $ map ((<> ": Default") . pp) tdefArgs) <> ">"
+                   else "<" <> (hsep $ punctuate comma $ map ((<> ": ::std::default::Default") . pp) tdefArgs) <> ">"
 
     -- Generate struct field, including #-annotations.
     -- If this field requires its own serde module (due to the deserialize_map_from_array attribute),
@@ -744,12 +761,12 @@ mkTypedef d tdef@TypeDef{..} =
               from_arr_attr = maybe empty (\_ -> "#[serde(with=\"" <> from_array_module_name <> "\")]")
                               $ fieldGetDeserializeArrayAttr d f
               from_array_module = maybe empty (\fname -> let kfunc = getFunc d fname [vtype] in
-                                                         "::differential_datalog::deserialize_map_from_array!(" <>
+                                                         "deserialize_map_from_array!(" <>
                                                          from_array_module_name <> "," <>
                                                          mkType d ktype <> "," <> mkType d vtype <> "," <>
                                                          mkFuncName d kfunc <> ");")
                                   $ fieldGetDeserializeArrayAttr d f
-              from_array_module_name = "__serde_" <> rnameFlat cons <> "_" <> pp (name f)
+              from_array_module_name = "__serde" <> rnameFlat cons <> "_" <> pp (name f)
 
     mkConstructor :: Constructor -> (Doc, Doc)
     mkConstructor c = (cons, vcat extras)
@@ -759,21 +776,21 @@ mkTypedef d tdef@TypeDef{..} =
         rattrs = getRustAttrs d $ consAttrs c
         cons = vcat (map (\attr -> "#[" <> pp attr <> "]") rattrs) $$
                if null $ consArgs c
-                  then pp $ nameLocal c
-                  else (pp $ nameLocal c) <+> "{" $$
+                  then nameLocal c
+                  else nameLocal c <+> "{" $$
                        nest' args $$
                        "}"
 
-    impl_abomonate = "impl" <+> targs_traits <+> "abomonation::Abomonation for" <+> pp (nameLocal tdefName) <> targs <> "{}"
+    impl_abomonate = "impl" <+> targs_traits <+> "abomonation::Abomonation for" <+> nameLocal tdefName <> targs <> "{}"
 
-    display = "impl" <+> targs_disp <+> "::std::fmt::Display for" <+> pp (nameLocal tdefName) <> targs <+> "{" $$
+    display = "impl" <+> targs_disp <+> "::std::fmt::Display for" <+> nameLocal tdefName <> targs <+> "{" $$
               "    fn fmt(&self, __formatter: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {"             $$
               "        match self {"                                                                           $$
               (nest' $ nest' $ nest' $ vcat $ punctuate comma $ map mkDispCons $ typeCons $ fromJust tdefType) $$
               "        }"                                                                                      $$
               "    }"                                                                                          $$
               "}"                                                                                              $$
-              "impl" <+> targs_disp <+> "::std::fmt::Debug for" <+> pp (nameLocal tdefName) <> targs <+> "{"   $$
+              "impl" <+> targs_disp <+> "::std::fmt::Debug for" <+> nameLocal tdefName <> targs <+> "{"        $$
               "    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {"                       $$
               "        ::std::fmt::Display::fmt(&self, f)"                                                     $$
               "    }"                                                                                          $$
@@ -798,14 +815,14 @@ mkTypedef d tdef@TypeDef{..} =
         where cname = mkConstructorName tdefName (fromJust tdefType) (name c)
 
     default_enum =
-              "impl "  <+> targs_def <+> "Default for" <+> pp (nameLocal tdefName) <> targs <+> "{"            $$
+              "impl" <+> targs_def <+> "::std::default::Default for" <+> nameLocal tdefName <> targs <+> "{"   $$
               "    fn default() -> Self {"                                                                     $$
               "        " <> cname <> "{" <> def_args <> "}"                                                    $$
               "    }"                                                                                          $$
               "}"
         where c = head $ typeCons $ fromJust tdefType
               cname = mkConstructorName tdefName (fromJust tdefType) (name c)
-              def_args = commaSep $ map (\a -> (pp $ name a) <+> ": Default::default()") $ consArgs c
+              def_args = commaSep $ map (\a -> (pp $ name a) <+> ": ::std::default::Default::default()") $ consArgs c
 {-
 Generate FromRecord trait implementation for a struct type:
 
@@ -839,7 +856,7 @@ impl <T: FromRecord> FromRecord for DummyEnum<T> {
 mkFromRecord :: DatalogProgram -> TypeDef -> Doc
 mkFromRecord d t@TypeDef{..} | tdefGetCustomFromRecord d t = empty
                              | otherwise =
-    "impl" <+> targs_bounds <+> "differential_datalog::record::FromRecord for" <+> pp (nameLocal t) <> targs <+> "{"            $$
+    "impl" <+> targs_bounds <+> "differential_datalog::record::FromRecord for" <+> nameLocal t <> targs <+> "{"                 $$
     "    fn from_record(val: &differential_datalog::record::Record) -> ::std::result::Result<Self, String> {"                   $$
     "        match val {"                                                                                                       $$
     "            differential_datalog::record::Record::PosStruct(constr, _args) => {"                                           $$
@@ -869,7 +886,7 @@ mkFromRecord d t@TypeDef{..} | tdefGetCustomFromRecord d t = empty
     "}"
     where
     targs = "<" <> (hcat $ punctuate comma $ map pp tdefArgs) <> ">"
-    targs_bounds = "<" <> (hcat $ punctuate comma $ map ((<> ": differential_datalog::record::FromRecord + serde::de::DeserializeOwned + Default") . pp) tdefArgs) <> ">"
+    targs_bounds = "<" <> (hcat $ punctuate comma $ map ((<> ": differential_datalog::record::FromRecord + serde::de::DeserializeOwned + ::std::default::Default") . pp) tdefArgs) <> ">"
     pos_constructors = vcat $ map mkposcons $ typeCons $ fromJust tdefType
     mkposcons :: Constructor -> Doc
     mkposcons c@Constructor{..} =
@@ -896,32 +913,32 @@ mkFromRecord d t@TypeDef{..} | tdefGetCustomFromRecord d t = empty
 
 mkStructIntoRecord :: TypeDef -> Doc
 mkStructIntoRecord t@TypeDef{..} =
-    "::differential_datalog::decl_struct_into_record!(" <> (pp $ nameLocal t) <> "[\"" <> pp (name t) <> "\"]" <> targs <> "," <+> args <> ");"
+    "::differential_datalog::decl_struct_into_record!(" <> nameLocal t <> "[\"" <> pp (name t) <> "\"]" <> targs <> "," <+> args <> ");"
     where
     targs = "<" <> (hcat $ punctuate comma $ map pp tdefArgs) <> ">"
     args = commaSep $ map (pp . name) $ consArgs $ head $ typeCons $ fromJust tdefType
 
 mkStructMutator :: DatalogProgram -> TypeDef -> Doc
 mkStructMutator d t@TypeDef{..} =
-    "::differential_datalog::decl_record_mutator_struct!(" <> (pp $ nameLocal t) <> ", " <> targs <> "," <+> args <> ");"
+    "::differential_datalog::decl_record_mutator_struct!(" <> nameLocal t <> ", " <> targs <> "," <+> args <> ");"
     where
     targs = "<" <> (hcat $ punctuate comma $ map pp tdefArgs) <> ">"
     args = commaSep $ map (\arg -> pp (name arg) <> ":" <+> mkType d arg) $ consArgs $ head $ typeCons $ fromJust tdefType
 
 mkEnumIntoRecord :: TypeDef -> Doc
 mkEnumIntoRecord t@TypeDef{..} =
-    "::differential_datalog::decl_enum_into_record!(" <> (pp $ nameLocal t) <> "," <+> targs <> "," <+> cons <> ");"
+    "::differential_datalog::decl_enum_into_record!(" <> nameLocal t <> "," <+> targs <> "," <+> cons <> ");"
     where
     targs = "<" <> (hcat $ punctuate comma $ map pp tdefArgs) <> ">"
-    cons = commaSep $ map (\c -> (pp $ nameLocal c) <> "[\"" <> pp (nameLocal c) <> "\"]" <> "{" <> (commaSep $ map (pp . name) $ consArgs c) <> "}")
+    cons = commaSep $ map (\c -> nameLocal c <> "[\"" <> pp (name c) <> "\"]" <> "{" <> (commaSep $ map (pp . name) $ consArgs c) <> "}")
                     $ typeCons $ fromJust tdefType
 
 mkEnumMutator :: DatalogProgram -> TypeDef -> Doc
 mkEnumMutator d t@TypeDef{..} =
-    "::differential_datalog::decl_record_mutator_enum!(" <> (pp $ nameLocal t) <> "," <+> targs <> "," <+> cons <> ");"
+    "::differential_datalog::decl_record_mutator_enum!(" <> nameLocal t <> "," <+> targs <> "," <+> cons <> ");"
     where
     targs = "<" <> (hcat $ punctuate comma $ map pp tdefArgs) <> ">"
-    cons = commaSep $ map (\c -> (pp $ nameLocal c) <> "{" <> (commaSep $ map (\arg -> pp (name arg) <> ":" <+> mkType d arg) $ consArgs c) <> "}")
+    cons = commaSep $ map (\c -> nameLocal c <> "{" <> (commaSep $ map (\arg -> pp (name arg) <> ":" <+> mkType d arg) $ consArgs c) <> "}")
                     $ typeCons $ fromJust tdefType
 
 unddname :: (WithName a) => a -> String
@@ -1466,7 +1483,7 @@ compileApplyNode :: (?cfg::Config) => DatalogProgram -> Apply -> ProgNode
 compileApplyNode d Apply{..} = ApplyNode $
     "{fn transformer() -> Box<dyn for<'a> Fn(&mut FnvHashMap<RelId, collection::Collection<scopes::Child<'a, worker::Worker<communication::Allocator>, TS>,DDValue,Weight>>)> {" $$
     "    Box::new(|collections| {"                                                                                                                             $$
-    "        let (" <> commaSep outputs <> ") =" <+> rnameFlat applyTransformer <> (parens $ commaSep inputs) <> ";"                                               $$
+    "        let (" <> commaSep outputs <> ") =" <+> rnameScoped applyTransformer <> (parens $ commaSep inputs) <> ";"                                         $$
     (nest' $ nest' $ vcat update_collections)                                                                                                                  $$
     "    })"                                                                                                                                                   $$
     "}; transformer}"
@@ -2537,7 +2554,7 @@ mkExpr' d ctx EStruct{..} | ctxInSetL ctx
                           | isstruct
                           = (parens $ tname <> fieldvals, EVal)
                           | otherwise
-                          = (parens $ tname <> "::" <> pp (nameLocal exprConstructor) <> fieldvals, EVal)
+                          = (parens $ tname <> "::" <> nameLocal exprConstructor <> fieldvals, EVal)
     where fieldvals  = braces $ commaSep $ map (\(fname, v) -> pp fname <> ":" <+> val v) exprStructFields
           fieldlvals = braces $ commaSep $ map (\(fname, v) -> pp fname <> ":" <+> lval v) exprStructFields
           tdef = consType d exprConstructor
@@ -2714,7 +2731,7 @@ mkExpr' d ctx EAs{..} | bothIntegers && narrow_from && narrow_to && width_cmp /=
                       -- they both correspond to the same Rust type
                       = (val exprExpr, EVal)
                       | bothIntegers
-                      = (parens $ tto <> "::from_" <> tfrom <> "(" <> val exprExpr <> ")", EVal)
+                      = (parens $ tto <> "::from_" <> nameLocal (render tfrom) <> "(" <> val exprExpr <> ")", EVal)
 
                       -- convert long integers to FP
                       | isFloat d to_type && (tfrom == "::differential_datalog::int::Int" || tfrom == "::differential_datalog::uint::Uint")
@@ -2758,9 +2775,9 @@ mkFuncName d f =
 
 -- Rust function name without the scope.
 mkFuncNameShort :: DatalogProgram -> Function -> Doc
-mkFuncNameShort d f | length namesakes == 1 = pp $ nameLocal $ name f
+mkFuncNameShort d f | length namesakes == 1 = nameLocal $ name f
                     | otherwise =
-    (pp $ nameLocal $ name f) <> "_" <> targ0 <> "_" <> pp (length $ funcArgs f)
+    (nameLocal $ name f) <> "_" <> targ0 <> "_" <> pp (length $ funcArgs f)
     where
     arg0 = funcArgs f !! 0
     targ0 = mkValConstructorName d $ typ arg0
@@ -2879,7 +2896,7 @@ castBV d e w1 w2 | t1 == t2
                  | w1 <= 128 && w2 <= 128
                  = parens $ e <+> "as" <+> t2
                  | w2 > 128
-                 = "::differential_datalog::uint::Uint::from_" <> t1 <> "(" <> e <> ")"
+                 = "::differential_datalog::uint::Uint::from_" <> nameLocal (render t1) <> "(" <> e <> ")"
                  | otherwise
                  = e <> "to_" <> t2 <> "().unwrap()"
     where

@@ -31,11 +31,13 @@ Description: DDlog's module system implemented as syntactic sugar over core synt
 module Language.DifferentialDatalog.Module(
     mOD_STD,
     DatalogModule(..),
+    emptyModule,
     moduleNameToPath,
     moduleIsChildOf,
     mainModuleName,
     nameScope,
     nameLocal,
+    nameLocalStr,
     scoped,
     parseDatalogProgram) where
 
@@ -80,8 +82,11 @@ moduleNameToPath (ModuleName (n:ns)) = n </> moduleNameToPath (ModuleName ns)
 nameScope :: (WithName a) => a -> ModuleName
 nameScope = ModuleName . init . split "::" . name
 
-nameLocal :: (WithName a) => a -> String
-nameLocal = last . split "::" . name
+nameLocal :: (WithName a) => a -> Doc
+nameLocal = pp . nameLocalStr
+
+nameLocalStr :: (WithName a) => a -> String
+nameLocalStr = last . split "::" . name
 
 scoped :: ModuleName -> String -> String
 scoped mod n = intercalate "::" (modulePath mod ++ [n])
@@ -93,6 +98,13 @@ data DatalogModule = DatalogModule {
     moduleName :: ModuleName,
     moduleFile :: FilePath,
     moduleDefs :: DatalogProgram
+}
+
+emptyModule :: ModuleName -> DatalogModule
+emptyModule mname = DatalogModule {
+    moduleName = mname,
+    moduleFile = "",
+    moduleDefs = emptyDatalogProgram
 }
 
 -- Standard library module name.
@@ -292,7 +304,7 @@ candidates DatalogModule{..} p n = do
 flattenName :: (MonadError String me) => (DatalogProgram -> String -> Maybe a) -> String -> MMap -> DatalogModule -> Pos -> String -> me (String, a)
 flattenName lookup_fun entity mmap mod p c = do
     cand_mods <- candidates mod p c
-    let lname = nameLocal c
+    let lname = nameLocalStr c
     let cands = concatMap (\m -> maybeToList $ (m,) <$> lookup_fun (moduleDefs m) lname) $ map (mmap M.!) cand_mods
     case cands of
          [(m,x)] -> return $ (scoped (moduleName m) lname, x)
@@ -312,7 +324,7 @@ flattenTypeName mmap mod p c = fst <$> flattenName lookupType "type" mmap mod p 
 flattenFuncName :: (MonadError String me) => MMap -> DatalogModule -> Pos -> String -> Int -> me [String]
 flattenFuncName mmap mod p fname nargs = do
     cand_mods <- candidates mod p fname
-    let lname = nameLocal fname
+    let lname = nameLocalStr fname
     let cands = filter (\m -> isJust $ lookupFuncs (moduleDefs m) lname nargs) $ map (mmap M.!) cand_mods
     case cands of
          [] -> err (moduleDefs mod) p $ "Unknown function '" ++ fname ++ "'"

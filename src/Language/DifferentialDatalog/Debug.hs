@@ -65,7 +65,7 @@ debugAggregateFunctionName :: Int -> Int -> String -> String
 debugAggregateFunctionName rlidx rhsidx fname =
     scoped scope fname_local'
     where
-    fname_local = nameLocal fname
+    fname_local = nameLocalStr fname
     fname_local' = "__debug_" ++ show rlidx ++ "_" ++ show rhsidx ++ "_" ++ fname_local
     scope = nameScope fname
 
