@@ -139,7 +139,8 @@ pub fn allocate_opt<B: Ord + Clone, N: num::Num + ops::Add + cmp::Ord + Copy>(
             if allocated.x.contains(&next) {
                 continue;
             } else {
-                res.x.push(((*b).clone(), crate::ddlog_std::Option::Some { x: next }));
+                res.x
+                    .push(((*b).clone(), crate::ddlog_std::Option::Some { x: next }));
                 break;
             }
         }

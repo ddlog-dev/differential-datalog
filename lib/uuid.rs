@@ -1,9 +1,9 @@
 use differential_datalog::record::Record;
 use serde::de::Deserializer;
 use serde::ser::Serializer;
-use ::std::default::Default;
-use ::std::ops::Deref;
-use ::std::fmt;
+use std::default::Default;
+use std::fmt;
+use std::ops::Deref;
 
 #[derive(Eq, Ord, Clone, Hash, PartialEq, PartialOrd)]
 pub struct Uuid(::uuid::Uuid);

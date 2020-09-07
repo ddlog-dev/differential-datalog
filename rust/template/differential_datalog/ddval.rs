@@ -278,9 +278,10 @@ macro_rules! decl_ddval_convert {
 
             unsafe fn from_ddval(v: $crate::ddval::DDVal) -> Self {
                 if ::std::mem::size_of::<Self>() <= ::std::mem::size_of::<usize>() {
-                    let res: Self = ::std::mem::transmute::<[u8; ::std::mem::size_of::<Self>()], Self>(
-                        *(&v.v as *const usize as *const [u8; ::std::mem::size_of::<Self>()]),
-                    );
+                    let res: Self =
+                        ::std::mem::transmute::<[u8; ::std::mem::size_of::<Self>()], Self>(
+                            *(&v.v as *const usize as *const [u8; ::std::mem::size_of::<Self>()]),
+                        );
                     ::std::mem::forget(v);
                     res
                 } else {
@@ -294,7 +295,9 @@ macro_rules! decl_ddval_convert {
                     let mut v: usize = 0;
                     unsafe {
                         *(&mut v as *mut usize as *mut [u8; ::std::mem::size_of::<Self>()]) =
-                            ::std::mem::transmute::<Self, [u8; ::std::mem::size_of::<Self>()]>(self);
+                            ::std::mem::transmute::<Self, [u8; ::std::mem::size_of::<Self>()]>(
+                                self,
+                            );
                     };
                     $crate::ddval::DDVal { v }
                 } else {
@@ -311,7 +314,8 @@ macro_rules! decl_ddval_convert {
                             if ::std::mem::size_of::<$t>() <= ::std::mem::size_of::<usize>() {
                                 unsafe { <$t>::from_ddval_ref(this) }.clone().into_ddval()
                             } else {
-                                let arc = unsafe { ::std::sync::Arc::from_raw(this.v as *const $t) };
+                                let arc =
+                                    unsafe { ::std::sync::Arc::from_raw(this.v as *const $t) };
                                 let res = $crate::ddval::DDVal {
                                     v: ::std::sync::Arc::into_raw(arc.clone()) as usize,
                                 };
@@ -354,7 +358,10 @@ macro_rules! decl_ddval_convert {
                         __f
                     },
                     hash: {
-                        fn __f(this: &$crate::ddval::DDVal, mut state: &mut dyn ::std::hash::Hasher) {
+                        fn __f(
+                            this: &$crate::ddval::DDVal,
+                            mut state: &mut dyn ::std::hash::Hasher,
+                        ) {
                             ::std::hash::Hash::hash(
                                 unsafe { <$t>::from_ddval_ref(this) },
                                 &mut state,
@@ -395,15 +402,18 @@ macro_rules! decl_ddval_convert {
                         fn __f(this: &mut $crate::ddval::DDVal) {
                             if ::std::mem::size_of::<$t>() <= ::std::mem::size_of::<usize>() {
                                 unsafe {
-                                    let _v: $t =
-                                        ::std::mem::transmute::<[u8; ::std::mem::size_of::<$t>()], $t>(
-                                            *(&this.v as *const usize
-                                                as *const [u8; ::std::mem::size_of::<$t>()]),
-                                        );
+                                    let _v: $t = ::std::mem::transmute::<
+                                        [u8; ::std::mem::size_of::<$t>()],
+                                        $t,
+                                    >(
+                                        *(&this.v as *const usize
+                                            as *const [u8; ::std::mem::size_of::<$t>()]),
+                                    );
                                 };
                             // v's destructor will do the rest.
                             } else {
-                                let _arc = unsafe { ::std::sync::Arc::from_raw(this.v as *const $t) };
+                                let _arc =
+                                    unsafe { ::std::sync::Arc::from_raw(this.v as *const $t) };
                                 // arc's destructor will do the rest.
                             }
                         };

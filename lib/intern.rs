@@ -3,11 +3,11 @@ use differential_datalog::record::*;
 use once_cell::sync::Lazy;
 use serde;
 use std::collections;
+use std::fmt;
+use std::hash::Hash;
 use std::marker;
 use std::sync;
 use std::vec;
-use std::fmt;
-use std::hash::Hash;
 
 #[cfg(feature = "flatbuf")]
 use flatbuf::{FromFlatBuffer, ToFlatBuffer, ToFlatBufferTable, ToFlatBufferVectorElement};

@@ -28,13 +28,13 @@ use ::std::result;
 */
 
 //use ::serde::de::DeserializeOwned;
-use ::serde::Deserialize;
-use ::serde::Serialize;
 use ::differential_datalog::record::FromRecord;
 use ::differential_datalog::record::IntoRecord;
 use ::differential_datalog::record::Mutator;
+use ::serde::Deserialize;
+use ::serde::Serialize;
 
-// `usize` is a builtin Rust type; we therefore declare an alias to DDlog's `usize`. 
+// `usize` is a builtin Rust type; we therefore declare an alias to DDlog's `usize`.
 pub type std_usize = u64;
 
 //use ::once_cell::sync::Lazy;

@@ -6,10 +6,10 @@ use differential_dataflow::collection::Collection;
 use differential_dataflow::lattice::Lattice;
 use differential_dataflow::operators::consolidate::Consolidate;
 use differential_dataflow::operators::ThresholdTotal;
+use differential_datalog::program::Weight;
 use std::mem;
 use timely::dataflow::scopes::Scope;
 use timely::order::TotalOrder;
-use differential_datalog::program::Weight;
 
 pub fn SCC<S, V, E, N, EF, LF>(
     edges: &Collection<S, V, Weight>,

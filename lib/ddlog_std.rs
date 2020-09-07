@@ -1,31 +1,31 @@
 /// Rust implementation of DDlog standard library functions and types.
-use ::differential_datalog::arcval;
-use ::differential_datalog::int;
-use ::differential_datalog::ddval::DDValue;
-use ::differential_datalog::program::Weight;
-use ::differential_datalog::record::arg_extract;
-use ::differential_datalog::record::Record;
+use differential_datalog::arcval;
+use differential_datalog::ddval::DDValue;
+use differential_datalog::int;
+use differential_datalog::program::Weight;
+use differential_datalog::record::arg_extract;
+use differential_datalog::record::Record;
 
-use ::fnv::FnvHasher;
-use ::serde::de::Deserializer;
-use ::serde::ser::Serializer;
+use fnv::FnvHasher;
+use serde::de::Deserializer;
+use serde::ser::Serializer;
 
-use ::std::borrow;
-use ::std::cmp;
-use ::std::collections::btree_map;
-use ::std::collections::btree_set;
-use ::std::collections::{BTreeMap, BTreeSet};
-use ::std::fmt;
-use ::std::fmt::Display;
-use ::std::hash::Hash;
-use ::std::hash::Hasher;
-use ::std::iter::FromIterator;
-use ::std::ops;
-use ::std::ops::Deref;
-use ::std::option;
-use ::std::result;
-use ::std::slice;
-use ::std::vec;
+use std::borrow;
+use std::cmp;
+use std::collections::btree_map;
+use std::collections::btree_set;
+use std::collections::{BTreeMap, BTreeSet};
+use std::fmt;
+use std::fmt::Display;
+use std::hash::Hash;
+use std::hash::Hasher;
+use std::iter::FromIterator;
+use std::ops;
+use std::ops::Deref;
+use std::option;
+use std::result;
+use std::slice;
+use std::vec;
 
 #[cfg(feature = "flatbuf")]
 use flatbuf::{FBIter, FromFlatBuffer, ToFlatBuffer, ToFlatBufferTable, ToFlatBufferVectorElement};
@@ -316,7 +316,9 @@ impl<'a, T> Vec<T> {
 
 impl<T> Vec<T> {
     pub fn new() -> Self {
-        Vec { x: ::std::vec::Vec::new() }
+        Vec {
+            x: ::std::vec::Vec::new(),
+        }
     }
     pub fn with_capacity(capacity: usize) -> Self {
         Vec {
@@ -330,7 +332,9 @@ impl<T> Vec<T> {
 
 impl<T: Clone> From<&[T]> for Vec<T> {
     fn from(s: &[T]) -> Self {
-        Vec { x: ::std::vec::Vec::from(s) }
+        Vec {
+            x: ::std::vec::Vec::from(s),
+        }
     }
 }
 

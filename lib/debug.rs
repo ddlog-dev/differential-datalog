@@ -1,7 +1,7 @@
-use ::std::fmt;
-use ::std::fs::OpenOptions;
-use ::std::io::Write;
-use ::std::string::ToString;
+use std::fmt;
+use std::fs::OpenOptions;
+use std::io::Write;
+use std::string::ToString;
 
 pub fn debug_event<T1: ToString, A1: Clone + IntoRecord, A2: Clone + IntoRecord>(
     operator_id: &(u32, u32, u32),
@@ -63,7 +63,8 @@ pub fn debug_event_join<
 pub fn debug_split_group<'a, K, I: 'static + Clone, V: 'static>(
     g: &'a crate::ddlog_std::Group<'a, K, (I, V)>,
 ) -> (crate::ddlog_std::Vec<I>, crate::ddlog_std::Group<'a, K, V>) {
-    let mut inputs = crate::ddlog_std::Vec::with_capacity(crate::ddlog_std::group_count(g) as usize);
+    let mut inputs =
+        crate::ddlog_std::Vec::with_capacity(crate::ddlog_std::group_count(g) as usize);
     for (i, _) in g.iter() {
         inputs.push(i.clone())
     }

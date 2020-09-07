@@ -40,9 +40,7 @@ impl record::Mutator<Url> for record::Record {
 
 pub fn url_parse(s: &String) -> crate::ddlog_std::Result<Url, String> {
     match ::url::Url::parse(s) {
-        Ok(url) => crate::ddlog_std::Result::Ok {
-            res: Url { url },
-        },
+        Ok(url) => crate::ddlog_std::Result::Ok { res: Url { url } },
         Err(e) => crate::ddlog_std::Result::Err {
             err: format!("{}", e),
         },
@@ -51,9 +49,7 @@ pub fn url_parse(s: &String) -> crate::ddlog_std::Result<Url, String> {
 
 pub fn join(url: &Url, other: &String) -> crate::ddlog_std::Result<Url, String> {
     match url.url.join(other.as_str()) {
-        Ok(url) => crate::ddlog_std::Result::Ok {
-            res: Url { url },
-        },
+        Ok(url) => crate::ddlog_std::Result::Ok { res: Url { url } },
         Err(e) => crate::ddlog_std::Result::Err {
             err: format!("{}", e),
         },

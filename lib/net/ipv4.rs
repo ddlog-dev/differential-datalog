@@ -1,10 +1,10 @@
 use differential_datalog::record::Record;
 use serde::de::Deserializer;
 use serde::ser::Serializer;
-use ::std::hash::Hash;
-use ::std::str::FromStr;
-use ::std::fmt;
-use ::std::ops::Deref;
+use std::fmt;
+use std::hash::Hash;
+use std::ops::Deref;
+use std::str::FromStr;
 
 #[derive(Eq, Ord, Clone, Hash, PartialEq, PartialOrd)]
 pub struct Ipv4Addr(::std::net::Ipv4Addr);
@@ -85,12 +85,16 @@ pub fn ipv4_from_u32(ip: &u32) -> Ipv4Addr {
     Ipv4Addr(::std::net::Ipv4Addr::from(*ip))
 }
 
-pub fn ipv4_from_octet_vec(octets: &crate::ddlog_std::Vec<u8>) -> crate::ddlog_std::Option<Ipv4Addr> {
+pub fn ipv4_from_octet_vec(
+    octets: &crate::ddlog_std::Vec<u8>,
+) -> crate::ddlog_std::Option<Ipv4Addr> {
     if octets.len() != 4 {
         return crate::ddlog_std::Option::None;
     };
     crate::ddlog_std::Option::Some {
-        x: Ipv4Addr::new(::std::net::Ipv4Addr::from([octets[0], octets[1], octets[2], octets[3]])),
+        x: Ipv4Addr::new(::std::net::Ipv4Addr::from([
+            octets[0], octets[1], octets[2], octets[3],
+        ])),
     }
 }
 pub fn ipv4_from_str(s: &String) -> crate::ddlog_std::Result<Ipv4Addr, String> {

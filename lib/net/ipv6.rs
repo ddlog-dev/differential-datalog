@@ -1,11 +1,11 @@
+use crate::ddlog_std::option2std;
 use differential_datalog::record::Record;
 use serde::de::Deserializer;
 use serde::ser::Serializer;
-use ::std::hash::Hash;
-use ::std::str::FromStr;
-use ::std::fmt;
-use ::std::ops::Deref;
-use crate::ddlog_std::option2std;
+use std::fmt;
+use std::hash::Hash;
+use std::ops::Deref;
+use std::str::FromStr;
 
 #[derive(Eq, Ord, Clone, Hash, PartialEq, PartialOrd)]
 pub struct Ipv6Addr(::std::net::Ipv6Addr);
@@ -91,7 +91,9 @@ pub fn ipv6_new(
     Ipv6Addr::new(::std::net::Ipv6Addr::new(*a, *b, *c, *d, *e, *f, *g, *h))
 }
 
-pub fn ipv6_from_segment_vec(segments: &crate::ddlog_std::Vec<u16>) -> crate::ddlog_std::Option<Ipv6Addr> {
+pub fn ipv6_from_segment_vec(
+    segments: &crate::ddlog_std::Vec<u16>,
+) -> crate::ddlog_std::Option<Ipv6Addr> {
     if segments.len() != 8 {
         return crate::ddlog_std::Option::None;
     };
@@ -132,7 +134,9 @@ pub fn ipv6_from_octets(
     ]))
 }
 
-pub fn ipv6_from_octet_vec(octets: &crate::ddlog_std::Vec<u8>) -> crate::ddlog_std::Option<Ipv6Addr> {
+pub fn ipv6_from_octet_vec(
+    octets: &crate::ddlog_std::Vec<u8>,
+) -> crate::ddlog_std::Option<Ipv6Addr> {
     if octets.len() != 16 {
         return crate::ddlog_std::Option::None;
     };
@@ -169,9 +173,7 @@ pub fn iPV6_UNSPECIFIED() -> Ipv6Addr {
     Ipv6Addr::new(::std::net::Ipv6Addr::UNSPECIFIED)
 }
 
-pub fn ipv6_segments(
-    addr: &Ipv6Addr,
-) -> (u16, u16, u16, u16, u16, u16, u16, u16) {
+pub fn ipv6_segments(addr: &Ipv6Addr) -> (u16, u16, u16, u16, u16, u16, u16, u16) {
     let segments = addr.segments();
     (
         segments[0],
