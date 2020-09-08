@@ -138,7 +138,7 @@ impl Mutator<IString> for Record {
 
 #[cfg(feature = "flatbuf")]
 impl<'a> FromFlatBuffer<&'a str> for IString {
-    fn from_flatbuf(fb: &'a str) -> Response<Self> {
+    fn from_flatbuf(fb: &'a str) -> Result<Self, String> {
         Ok(string_intern(&String::from_flatbuf(fb)?))
     }
 }
@@ -154,7 +154,7 @@ impl<'b> ToFlatBuffer<'b> for IString {
 
 #[cfg(feature = "flatbuf")]
 impl<'a> FromFlatBuffer<fb::__String<'a>> for IString {
-    fn from_flatbuf(v: fb::__String<'a>) -> Response<Self> {
+    fn from_flatbuf(v: fb::__String<'a>) -> Result<Self, String> {
         Ok(string_intern(&String::from_flatbuf(v)?))
     }
 }

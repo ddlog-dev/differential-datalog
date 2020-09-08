@@ -58,7 +58,7 @@ typedef ddlog_std::Either<'A,'B> = ddlog_std::Left{l: 'A} |
                                    ddlog_std::Right{r: 'B}
 extern type ddlog_std::Group<'K,'V>
 extern type ddlog_std::Map<'K,'V>
-#[rust = "serde(from=\"Option<A>\", into=\"Option<A>\", bound(serialize=\"A: Clone+Serialize\"))"]
+#[rust = "serde(from=\"::std::option::Option<A>\", into=\"::std::option::Option<A>\", bound(serialize=\"A: Clone+Serialize\"))"]
 #[custom_from_record = true]
 typedef ddlog_std::Option<'A> = ddlog_std::None{} |
                                 ddlog_std::Some{x: 'A}

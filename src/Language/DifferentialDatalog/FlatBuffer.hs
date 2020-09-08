@@ -1619,7 +1619,7 @@ rustTypeFromFlatbuf t@TUser{..} =
     fbstruct = "fb::" <> fbStructName typeName typeArgs
     tstruct = typ' ?d t
     cons = map (\c -> let fbcname = fbConstructorName typeArgs c
-                          cname = R.rnameScoped typeName <> "::" <> (pp $ name c)
+                          cname = R.mkConstructorName typeName tstruct (name c)
                           args = map (\a -> pp (name a) <> ": <" <> R.mkType ?d a <> ">::from_flatbuf(" <> extract_field cname a <> ")?")
                                      $ consArgs c
                       in if null args
@@ -1632,7 +1632,7 @@ rustTypeFromFlatbuf t@TUser{..} =
                                  "},")
                $ typeCons tstruct
     to_cons = map (\c -> let fbcname = fbConstructorName typeArgs c
-                             cname = R.rnameScoped typeName <> "::" <> (pp $ name c)
+                             cname = R.mkConstructorName typeName tstruct (name c)
                              args = map (\a -> serialize_field "" a (rustFieldName a)) $ consArgs c
                              arg_names = map (\a -> let n = pp (name a) in
                                                if typeHasUniqueConstructor a

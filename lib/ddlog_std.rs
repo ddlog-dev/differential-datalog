@@ -76,7 +76,7 @@ impl<T, FB> FromFlatBuffer<FB> for Ref<T>
 where
     T: FromFlatBuffer<FB>,
 {
-    fn from_flatbuf(fb: FB) -> Result<Self, String> {
+    fn from_flatbuf(fb: FB) -> ::std::result::Result<Self, String> {
         Ok(Ref::from(T::from_flatbuf(fb)?))
     }
 }
@@ -423,7 +423,7 @@ where
     T: Ord + FromFlatBuffer<F::Inner>,
     F: fbrt::Follow<'a> + 'a,
 {
-    fn from_flatbuf(fb: fbrt::Vector<'a, F>) -> Result<Self, String> {
+    fn from_flatbuf(fb: fbrt::Vector<'a, F>) -> ::std::result::Result<Self, String> {
         let mut vec = Vec::with_capacity(fb.len());
         for x in FBIter::from_vector(fb) {
             vec.push(T::from_flatbuf(x)?);
@@ -438,7 +438,7 @@ impl<'a, T> FromFlatBuffer<&'a [T]> for Vec<T>
 where
     T: Clone,
 {
-    fn from_flatbuf(fb: &'a [T]) -> Result<Self, String> {
+    fn from_flatbuf(fb: &'a [T]) -> ::std::result::Result<Self, String> {
         let mut vec = Vec::with_capacity(fb.len());
         vec.extend_from_slice(fb);
         Ok(vec)
@@ -453,7 +453,7 @@ where
     type Target = fbrt::WIPOffset<fbrt::Vector<'b, <T::Target as fbrt::Push>::Output>>;
 
     fn to_flatbuf(&self, fbb: &mut fbrt::FlatBufferBuilder<'b>) -> Self::Target {
-        let vec: Vec<T::Target> = self
+        let vec: ::std::vec::Vec<T::Target> = self
             .iter()
             .map(|x| x.to_flatbuf_vector_element(fbb))
             .collect();
@@ -682,7 +682,7 @@ where
     T: Ord + FromFlatBuffer<F::Inner>,
     F: fbrt::Follow<'a> + 'a,
 {
-    fn from_flatbuf(fb: fbrt::Vector<'a, F>) -> Result<Self, String> {
+    fn from_flatbuf(fb: fbrt::Vector<'a, F>) -> ::std::result::Result<Self, String> {
         let mut set = Set::new();
         for x in FBIter::from_vector(fb) {
             set.insert(T::from_flatbuf(x)?);
@@ -697,7 +697,7 @@ impl<'a, T> FromFlatBuffer<&'a [T]> for Set<T>
 where
     T: Ord + Clone,
 {
-    fn from_flatbuf(fb: &'a [T]) -> Result<Self, String> {
+    fn from_flatbuf(fb: &'a [T]) -> ::std::result::Result<Self, String> {
         let mut set = Set::new();
         for x in fb.iter() {
             set.insert(x.clone());
@@ -714,7 +714,7 @@ where
     type Target = fbrt::WIPOffset<fbrt::Vector<'b, <T::Target as fbrt::Push>::Output>>;
 
     fn to_flatbuf(&self, fbb: &mut fbrt::FlatBufferBuilder<'b>) -> Self::Target {
-        let vec: Vec<T::Target> = self
+        let vec: ::std::vec::Vec<T::Target> = self
             .iter()
             .map(|x| x.to_flatbuf_vector_element(fbb))
             .collect();
@@ -928,7 +928,7 @@ where
     K: Ord,
     (K, V): FromFlatBuffer<F::Inner>,
 {
-    fn from_flatbuf(fb: fbrt::Vector<'a, F>) -> Result<Self, String> {
+    fn from_flatbuf(fb: fbrt::Vector<'a, F>) -> ::std::result::Result<Self, String> {
         let mut m = Map::new();
         for x in FBIter::from_vector(fb) {
             let (k, v) = <(K, V)>::from_flatbuf(x)?;
@@ -949,7 +949,7 @@ where
     type Target = fbrt::WIPOffset<fbrt::Vector<'b, <T as fbrt::Push>::Output>>;
 
     fn to_flatbuf(&self, fbb: &mut fbrt::FlatBufferBuilder<'b>) -> Self::Target {
-        let vec: Vec<<(K, V) as ToFlatBufferVectorElement<'b>>::Target> = self
+        let vec: ::std::vec::Vec<<(K, V) as ToFlatBufferVectorElement<'b>>::Target> = self
             .iter()
             .map(|(k, v)| (k, v).to_flatbuf_vector_element(fbb))
             .collect();
