@@ -5,18 +5,14 @@ use std::iter::FromIterator;
 pub fn map_extract_val_uuids<K: Val>(
     ids: &ddlog_std::Map<K, uuid_or_string_t>,
 ) -> ddlog_std::Map<K, uuid> {
-    ddlog_std::Map::from_iter(
-        ids.x
-            .iter()
-            .map(|(k, v)| (k.clone(), extract_uuid(v))),
-    )
+    ddlog_std::Map::from_iter(ids.x.iter().map(|(k, v)| (k.clone(), extract_uuid(v))))
 }
 pub fn set_extract_uuids(ids: &ddlog_std::Set<uuid_or_string_t>) -> ddlog_std::Set<uuid> {
     ddlog_std::Set::from_iter(ids.x.iter().map(|x| extract_uuid(x)))
 }
 
 pub fn group2vec_remove_sentinel<K>(
-    g: &ddlog_std::Group<K,uuid_or_string_t>,
+    g: &ddlog_std::Group<K, uuid_or_string_t>,
 ) -> ddlog_std::Vec<uuid_or_string_t> {
     let mut res = ddlog_std::Vec::new();
     for ref v in g.iter() {
@@ -35,7 +31,7 @@ pub fn group2vec_remove_sentinel<K>(
 }
 
 pub fn group2set_remove_sentinel<K>(
-    g: &ddlog_std::Group<K,uuid_or_string_t>,
+    g: &ddlog_std::Group<K, uuid_or_string_t>,
 ) -> ddlog_std::Set<uuid_or_string_t> {
     let mut res = ddlog_std::Set::new();
     for ref v in g.iter() {
