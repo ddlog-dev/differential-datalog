@@ -445,11 +445,11 @@ fn uuid_from_int(i: &BigInt) -> Result<String, String> {
 }
 
 // exported to DDlog; hence the funny name
-pub fn ovsdb_uuid2str(i: &u128) -> String {
+pub fn uuid2str(i: &u128) -> String {
     uuid::Uuid::from_u128(i.to_be()).to_hyphenated().to_string()
 }
 
-pub fn ovsdb_uuid2name(i: &u128) -> String {
+pub fn uuid2name(i: &u128) -> String {
     let s = uuid::Uuid::from_u128(i.to_be()).to_simple().to_string();
     format!(
         "u{}_{}_{}_{}_{}",
