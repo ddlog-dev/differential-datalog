@@ -1877,12 +1877,12 @@ mkAggregate d filters input_val rl@Rule{..} idx = do
     -- Pass group-by variables to the aggregate function.
     let grp = "&" <> rnameScoped False gROUP_TYPE <> "::new(&" <> (mkExpr d gctx rhsGroupBy EVal) <> "," <+> gROUP_VAR <> "," <+> project <> ")"
     let tparams = commaSep $ map (\tvar -> mkType d False (tmap M.! tvar)) $ funcTypeVars agg_func
-    let aggregate = "let" <+> pp rhsVar <+> "=" <+> rnameScoped False rhsAggFunc <>
+    let aggregate = "let ref" <+> pp rhsVar <+> "=" <+> rnameScoped False rhsAggFunc <>
                     "::<" <> tparams <> ">(" <> grp <> ");"
     -- Apply filters following aggregation.
     let post_filters = mkFilters d rl idx
         last_idx = idx + length post_filters
-    result <- mkVarsTupleValue d $ map (\v -> (v, if name v == rhsVar then EVal else EReference)) $ rhsVarsAfter d rl last_idx
+    result <- mkVarsTupleValue d $ map (\v -> (v, EReference)) $ rhsVarsAfter d rl last_idx
     let key_vars = exprVars d gctx rhsGroupBy
     open_key <- openTuple d kEY_VAR key_vars
     let agfun = braces'
