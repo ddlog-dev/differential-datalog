@@ -1885,13 +1885,13 @@ mkAggregate d filters input_val rl@Rule{..} idx = do
     let agfun = braces'
                 $ open_key  $$
                   aggregate $$
-                  result
+                  "Some(" <> result <> ")"
     next <- compileRule d rl idx False
     return $
         "XFormArrangement::Aggregate{"                                                                                           $$
         "    description:" <+> (pp $ show $ show $ rulePPPrefix rl $ idx + 1) <> ".to_string(),"                                 $$
         "    ffun:" <+> ffun <> ","                                                                                              $$
-        "    aggfun: &{fn __f(" <> kEY_VAR <> ": &DDValue," <+> gROUP_VAR <> ": &[(&DDValue, Weight)]) -> DDValue" $$ agfun $$ "__f}," $$
+        "    aggfun: &{fn __f(" <> kEY_VAR <> ": &DDValue," <+> gROUP_VAR <> ": &[(&DDValue, Weight)]) -> Option<DDValue>" $$ agfun $$ "__f}," $$
         "    next: Box::new(" <> next <> ")"                                                                                     $$
         "}"
 
