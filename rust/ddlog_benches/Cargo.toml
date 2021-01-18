@@ -1,0 +1,26 @@
+[package]
+name = "ddlog_benches"
+version = "0.1.0"
+edition = "2018"
+license = "MIT"
+
+[dependencies]
+criterion = "0.3.3"
+serde_json = "1.0.61"
+zstd = "0.6.0" # zstd.1.4.8
+
+[dependencies.citations_ddlog]
+package = "citations"
+path = "generated/citations_ddlog"
+default-features = false
+
+[dependencies.citations_differential_datalog]
+package = "differential_datalog"
+path = "generated/citations_ddlog/differential_datalog"
+
+[dev-dependencies]
+criterion = "0.3.3"
+
+[[bench]]
+name = "citations"
+harness = false

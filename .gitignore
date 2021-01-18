@@ -75,3 +75,4 @@ sql/libddlogapi.*
 sql/program.dl
 
 testsuite.log/
+rust/ddlog_benches/generated/*_ddlog

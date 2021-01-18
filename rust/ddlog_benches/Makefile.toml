@@ -1,0 +1,43 @@
+# Runs all ddlog benchmarks
+[tasks.benchmark-all]
+script_runner = "@duckscript"
+script = """
+time = current_time
+mv target/criterion benchmarks/${time}-criterion
+"""
+dependencies = ["bench-citations"]
+
+# Runs the benchmark suite on the citations bench case
+[tasks.bench-citations]
+command = "cargo"
+args = ["bench"]
+dependencies = ["build-citations"]
+private = true
+
+# Runs `ddlog` on the citations bench case to generate code
+[tasks.build-citations]
+command = "ddlog"
+args = [
+    "-i",
+    "ddlog/citations.dl",
+    "--output-dir",
+    "generated",
+    "--nested-ts-32",
+    "--omit-profile",
+    "--omit-workspace",
+]
+dependencies = ["clean-citations"]
+private = true
+
+# Remove the old generated code (prevents OS errors and errors that
+# occur when switching between different versions of ddlog that each
+# generated & depend on different generated files)
+#
+# Note: This is by *no* means a bottleneck or slowdown, the benchmarks
+# themselves take *vastly* more time to run
+[tasks.clean-citations]
+script_runner = "@duckscript"
+script = """
+rm -rf generated/citations_ddlog
+"""
+private = true
