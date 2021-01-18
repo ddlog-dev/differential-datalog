@@ -9,4 +9,17 @@ first install `cargo-make` with the following command (`--force` makes cargo ins
 cargo install --force cargo-make
 ```
 
+To run all benchmarks use the following command
+
+```sh
+cargo make benchmark-all
+```
+
+When adding a benchmark, add the required ddlog code to `/ddlog`, any datasets to `/data` (preferably in a
+compressed format), add a module within `/src` containing your support code and the actual benchmark within
+`/benches` and finally add a `[[bench]]` entry into the `Cargo.toml` along with any required dependencies.
+For info on writing benchmarks see the [criterion user guide] and the [criterion docs].
+
 [`cargo-make`]: https://github.com/sagiegurari/cargo-make
+[criterion user guide]: https://bheisler.github.io/criterion.rs/book/index.html
+[criterion docs]: https://docs.rs/criterion
