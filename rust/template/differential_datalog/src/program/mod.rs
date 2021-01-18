@@ -32,7 +32,7 @@ use std::{
     iter,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Barrier, Mutex,
+        Arc, Mutex,
     },
     thread::{self, JoinHandle, Thread},
 };
@@ -902,7 +902,6 @@ impl Program {
 
         // Shared timestamp managed by worker 0 and read by all other workers
         let frontier_ts = TSAtomic::new(0);
-        let progress_barrier = Arc::new(Barrier::new(number_workers));
 
         // Clone the program so that it can be moved into the timely computation
         let program = Arc::new(self.clone());
@@ -917,7 +916,6 @@ impl Program {
                     program.clone(),
                     &frontier_ts,
                     number_workers,
-                    progress_barrier.clone(),
                     profiling.clone(),
                     Arc::clone(&request_recv),
                     Arc::clone(&reply_send),

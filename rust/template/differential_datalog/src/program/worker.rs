@@ -27,7 +27,7 @@ use std::{
     rc::Rc,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Barrier,
+        Arc,
     },
     thread::{self, Thread},
     time::Duration,
@@ -61,8 +61,6 @@ pub struct DDlogWorker<'a> {
     frontier_timestamp: &'a TSAtomic,
     /// Peer workers' thread handles, only used by worker 0.
     peers: FnvHashMap<usize, Thread>,
-    /// The progress barrier used for transactions
-    progress_barrier: Arc<Barrier>,
     /// Information on which metrics are enabled and a
     /// channel for sending profiling data
     profiling: ProfilingData,
@@ -80,7 +78,6 @@ impl<'a> DDlogWorker<'a> {
         program: Arc<Program>,
         frontier_timestamp: &'a TSAtomic,
         num_workers: usize,
-        progress_barrier: Arc<Barrier>,
         profiling: ProfilingData,
         request_receivers: Arc<[Receiver<Msg>]>,
         reply_senders: Arc<[Sender<Reply>]>,
@@ -119,7 +116,6 @@ impl<'a> DDlogWorker<'a> {
             program,
             frontier_timestamp,
             peers,
-            progress_barrier,
             profiling,
             request_receiver: request_receivers[worker_index].clone(),
             reply_sender: reply_senders[worker_index].clone(),
@@ -278,7 +274,6 @@ impl<'a> DDlogWorker<'a> {
                 // worker 0 can know exactly when all other workers have processed all data
                 // for the `frontier_ts` timestamp, so that it knows when a transaction has
                 // been fully committed and produced all its outputs.
-                self.progress_barrier.wait();
                 let time = self.frontier_timestamp.load(Ordering::SeqCst);
 
                 // TS::max_value() == 0xffffffffffffffff*
@@ -296,7 +291,6 @@ impl<'a> DDlogWorker<'a> {
                     }
                 }
 
-                self.progress_barrier.wait();
                 // We're all caught up with `frontier_ts` and can now spend some time
                 // garbage collecting.  The `step_or_park` call below will block if there
                 // is no more garbage collecting left to do.  It will wake up when one of
@@ -377,12 +371,9 @@ impl<'a> DDlogWorker<'a> {
                 self.set_frontier_timestamp(*session.time());
                 self.unpark_peers();
 
-                self.progress_barrier.wait();
                 while probe.less_than(session.time()) {
                     self.worker.step_or_park(None);
                 }
-
-                self.progress_barrier.wait();
             }
         }
     }
@@ -392,7 +383,6 @@ impl<'a> DDlogWorker<'a> {
     fn stop_all_workers(&self) {
         self.set_frontier_timestamp(TS::max_value());
         self.unpark_peers();
-        self.progress_barrier.wait();
     }
 
     /// Handle a query
