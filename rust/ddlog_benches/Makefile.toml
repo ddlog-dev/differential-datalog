@@ -5,7 +5,7 @@ script = """
 time = current_time
 mv target/criterion benchmarks/${time}-criterion
 """
-dependencies = ["bench-citations"]
+dependencies = ["download-data", "bench-citations"]
 
 # Runs the benchmark suite on the citations bench case
 [tasks.bench-citations]
@@ -41,3 +41,29 @@ script = """
 rm -rf generated/citations_ddlog
 """
 private = true
+
+[tasks.download-data]
+script_runner = "@duckscript"
+script = """
+fn <scope> download_file
+    file = set ${1}
+    url = set ${2}
+
+    if not is_path_exists data/${file}
+        echo downloading '${url}' to 'data/${file}'
+
+        start_time = current_time
+        wget -O data/${file} ${url}
+        end_time = current_time
+
+        millis = calc ${end_time} - ${start_time}
+        sec = calc ${millis} / 1000
+        echo downloaded 'data/${file}' in ${sec}sec
+    else
+        echo '${file}' has already been downloaded, skipping
+    end
+end
+
+download_file twitter-2010-ids.csv.gz https://snap.stanford.edu/data/twitter-2010-ids.csv.gz
+download_file soc-LiveJournal1.txt.gz https://snap.stanford.edu/data/soc-LiveJournal1.txt.gz
+"""
