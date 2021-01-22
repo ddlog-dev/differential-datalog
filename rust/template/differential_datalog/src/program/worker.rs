@@ -152,7 +152,7 @@ impl<'a> DDlogWorker<'a> {
             .filter(|&(relid, _)| self.program.get_relation(relid).input)
             .collect();
 
-        'worker_loop: while self.running.load(Ordering::Relaxed) {
+        'worker_loop: while self.running.load(Ordering::Acquire) {
             // Non-blocking receive, so that we can do some garbage collecting
             // when there is no real work to do.
             match self.request_receiver.try_recv() {
@@ -200,6 +200,7 @@ impl<'a> DDlogWorker<'a> {
             self.worker.step_or_park(None);
         }
 
+        self.stop_all_workers();
         Ok(())
     }
 
