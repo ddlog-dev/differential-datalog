@@ -77,3 +77,5 @@ sql/program.dl
 testsuite.log/
 rust/ddlog_benches/generated/*_ddlog
 !rust/ddlog_benches/ddlog
+rust/ddlog_benches/data
+!rust/ddlog_benches/data/.gitkeep

@@ -4,23 +4,30 @@ version = "0.1.0"
 edition = "2018"
 license = "MIT"
 
+[features]
+default = []
+
 [dependencies]
 criterion = "0.3.3"
-serde_json = "1.0.61"
-zstd = "0.6.0" # zstd.1.4.8
+flate2 = "1.0.19"
+csv = "1.1.5"
 
-[dependencies.citations_ddlog]
-package = "citations"
-path = "generated/citations_ddlog"
+[dependencies.benchmarks_ddlog]
+package = "benchmarks"
+path = "generated/benchmarks_ddlog"
 default-features = false
 
-[dependencies.citations_differential_datalog]
+[dependencies.benchmarks_differential_datalog]
 package = "differential_datalog"
-path = "generated/citations_ddlog/differential_datalog"
+path = "generated/benchmarks_ddlog/differential_datalog"
 
 [dev-dependencies]
 criterion = "0.3.3"
 
 [[bench]]
-name = "citations"
+name = "twitter"
+harness = false
+
+[[bench]]
+name = "live_journal"
 harness = false

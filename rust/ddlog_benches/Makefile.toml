@@ -1,33 +1,32 @@
 # Runs all ddlog benchmarks
-[tasks.benchmark-all]
-script_runner = "@duckscript"
-script = """
-time = current_time
-mv target/criterion benchmarks/${time}-criterion
-"""
-dependencies = ["download-data", "bench-citations"]
+[tasks.benchmarks]
+dependencies = ["download-data", "bench-twitter", "bench-livejournal"]
 
-# Runs the benchmark suite on the citations bench case
-[tasks.bench-citations]
+# Runs the benchmark suite on the citations dataset
+[tasks.bench-livejournal]
 command = "cargo"
-args = ["bench"]
-dependencies = ["build-citations"]
-private = true
+args = ["bench", "LiveJournal"]
+dependencies = ["build-ddlog"]
 
-# Runs `ddlog` on the citations bench case to generate code
-[tasks.build-citations]
+# Runs the benchmark suite on the twitter dataset
+[tasks.bench-twitter]
+command = "cargo"
+args = ["bench", "twitter"]
+dependencies = ["build-ddlog"]
+
+# Runs `ddlog` to generate ddlog code
+[tasks.build-ddlog]
 command = "ddlog"
 args = [
     "-i",
-    "ddlog/citations.dl",
+    "ddlog/benchmarks.dl",
     "--output-dir",
     "generated",
     "--nested-ts-32",
     "--omit-profile",
     "--omit-workspace",
 ]
-dependencies = ["clean-citations"]
-private = true
+dependencies = ["clean-generated"]
 
 # Remove the old generated code (prevents OS errors and errors that
 # occur when switching between different versions of ddlog that each
@@ -35,10 +34,11 @@ private = true
 #
 # Note: This is by *no* means a bottleneck or slowdown, the benchmarks
 # themselves take *vastly* more time to run
-[tasks.clean-citations]
+[tasks.clean-generated]
 script_runner = "@duckscript"
 script = """
-rm -rf generated/citations_ddlog
+rm -rf generated
+touch generated/.gitkeep
 """
 private = true
 
