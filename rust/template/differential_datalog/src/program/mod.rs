@@ -1604,7 +1604,7 @@ impl RunningProgram {
         }
 
         self.flush()
-            .and_then(|_| self.send(0, Msg::Stop))
+            .and_then(|_| self.broadcast(Msg::Stop))
             .and_then(|_| {
                 self.worker_guards.take().map_or(Ok(()), |worker_guards| {
                     worker_guards
@@ -1628,7 +1628,7 @@ impl RunningProgram {
         }
 
         self.transaction_in_progress = true;
-        Result::Ok(())
+        Ok(())
     }
 
     /// Commit a transaction.
