@@ -57,14 +57,12 @@ use dogsdogsdogs::{
     calculus::{Differentiate, Integrate},
     operators::lookup_map,
 };
-use timely::communication::{
-    initialize::{Configuration, WorkerGuards},
-    Allocator,
-};
+use timely::communication::{initialize::WorkerGuards, Allocator};
 use timely::dataflow::scopes::*;
 use timely::order::TotalOrder;
 use timely::progress::{timestamp::Refines, PathSummary, Timestamp};
 use timely::worker::Worker;
+use timely::Config;
 
 type ValTrace<S> = DefaultValTrace<DDValue, DDValue, <S as ScopeParent>::Timestamp, Weight, u32>;
 type KeyTrace<S> = DefaultKeyTrace<DDValue, <S as ScopeParent>::Timestamp, Weight, u32>;
@@ -999,7 +997,7 @@ impl Program {
 
         // Start up timely computation.
         let worker_guards = timely::execute(
-            Configuration::Process(number_workers),
+            Config::process(number_workers),
             move |worker: &mut Worker<Allocator>| -> Result<_, String> {
                 let worker = DDlogWorker::new(
                     worker,

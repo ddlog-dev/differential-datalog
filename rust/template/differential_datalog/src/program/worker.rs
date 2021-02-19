@@ -380,13 +380,6 @@ impl<'a> DDlogWorker<'a> {
                             // Send scheduling events if profiling is enabled
                             TimelyEvent::Schedule(_) => profile_cpu || profile_timely,
 
-                            // Send timely events if timely profiling is enabled
-                            TimelyEvent::GuardedMessage(_)
-                            | TimelyEvent::Messages(_)
-                            | TimelyEvent::Park(_)
-                            | TimelyEvent::Progress(_)
-                            | TimelyEvent::PushProgress(_) => profile_timely,
-
                             _ => false,
                         }
                     })
