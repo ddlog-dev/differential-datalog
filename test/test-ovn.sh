@@ -24,23 +24,15 @@ if [ -z "${IS_CI_RUN}" ]; then
     stack install
 fi
 
-clone_repo https://github.com/ryzhyk/ovs.git ovs ovs-for-ddlog
-clone_repo https://github.com/ryzhyk/ovn.git ovn
+clone_repo https://github.com/ryzhyk/ovn.git ovn ddlog_ci15_1
 clone_repo https://github.com/ddlog-dev/ovn-test-data.git ovn-test-data v5
 
-# TODO: use OVS master once these changes are there.
-(cd ovs &&
- ./boot.sh &&
- ./configure  &&
- make -j6)
-
-# TODO: maintain and eventually remove the list of tests.
 # TODO: use -j6 once build script is fixed
-# TODO: use primary OVN repo
 (cd ovn &&
- git checkout ddlog_ci15 &&
+ git submodule update --init --recursive &&
+ (cd ovs && ./boot.sh && ./configure && make -j6)
  ./boot.sh &&
- ./configure --with-ddlog=../../lib --with-ovs-source=../ovs --enable-shared &&
+ ./configure --with-ddlog=../../lib --with-ovs-source=./ovs --enable-shared &&
  (make northd/ddlog.stamp && make check -j1 NORTHD_CLI=1 ||
  (find tests/testsuite.dir/ \( -name testsuite.log -o -name ovn-northd.log \) -exec echo '{}' \; -exec cat '{}' \; && false))
 )
